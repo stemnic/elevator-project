@@ -18,8 +18,8 @@ pub struct Elev_Controller {
     last_floor: Floor,
 }
 
-struct Order {
-    floor: usize
+pub struct Order {
+    pub floor: u8
 }
 
 
@@ -37,11 +37,9 @@ impl Elev_Controller {
     
     pub fn handle_order(&mut self) {
         if !self.stopped {
-            let mut order;
             let mut is_order;
             match self.queue.front() {
                 Some(value) => {
-                    order = value;
                     is_order = true;
                 }
                 None => {
@@ -52,24 +50,39 @@ impl Elev_Controller {
                         .expect("Get FloorSignal failed") {
                 Floor::At(c_floor) => {
                     if !is_order {
-                        self.driver.set_motor_dir(MotorDir::Stop);
-                    }
-                    println!("[elev_controller] C: {:?}", c_floor);
-                    match self.last_floor {
-                        Floor::At(p_floor) => {
-                            println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
-                            if p_floor != c_floor {
-                                self.last_floor = self.driver.get_floor_signal().unwrap();
-                                self.open_door();
+                        self.driver.set_motor_dir(MotorDir::Stop).unwrap();
+                    } else {
+                        match self.queue.front() {
+                            Some(order) => {
+                                if c_floor > order.floor{
+                                    self.driver.set_motor_dir(MotorDir::Down).expect("Set MotorDir failed");
+                                }
+                                if c_floor < order.floor{
+                                    self.driver.set_motor_dir(MotorDir::Up).expect("Set MotorDir failed");
+                                }
+                                if c_floor == order.floor{
+                                    self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
+                                    match self.last_floor {
+                                        Floor::At(p_floor) => {
+                                            println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
+                                            if p_floor != c_floor {
+                                                self.last_floor = self.driver.get_floor_signal().unwrap();
+                                                self.open_door();
+                                            }
+                                        }
+                                        Floor::Between => {
+                                            self.last_floor = self.driver.get_floor_signal().unwrap();
+                                            self.open_door();
+                                        }
+                                    }
+                                }
                             }
-                        }
-                        Floor::Between => {
-                            self.last_floor = self.driver.get_floor_signal().unwrap();
-                            self.open_door();
+                            None => {}
                         }
                     }
-                    
+                    println!("[elev_controller] C: {:?}", c_floor);   
                 }
+                // TODO: Make elevator handle floor logic if it starts in between state
                 Floor::Between => {
                     if !is_order {
                         self.driver.set_motor_dir(MotorDir::Down);
@@ -89,12 +102,15 @@ impl Elev_Controller {
 
     fn open_door(&mut self) {
         self.driver.set_door_light(Light::On);
-        sleep(Duration::from_secs(3));
+        sleep(Duration::from_secs(3)); // Should not be a delay
         self.driver.set_door_light(Light::Off);
     }
 
     fn recive_order(&mut self) {
         let order = self.recive_queue.try_recv().unwrap();
+        self.queue.push_back(order);
+    }
+    pub fn add_order(&mut self, order: Order) {
         self.queue.push_back(order);
     }
 }
