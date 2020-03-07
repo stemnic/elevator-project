@@ -1,5 +1,9 @@
 use std::io;
 use elevator_driver::*;
+use network_rust::bcast::BcastReceiver;
+use std::sync::mpsc::*;
+
+
 
 struct Task {
     id: usize, // Necessery?
@@ -29,3 +33,6 @@ fn cost_function() {
     let direction = elevator_driver::elev_driver::ElevIo::new();
 }
 
+fn recive_message() {
+
+}
