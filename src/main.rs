@@ -8,7 +8,7 @@ mod elev_controller;
 
 fn main() {
     println!("Starting");
-    let mut controller = elev_controller::Elev_Controller::new().unwrap();
+    let mut controller = elev_controller::ElevController::new().unwrap();
     println!("Done init!");
     controller.add_order(elev_controller::Order{floor: 3});
     controller.add_order(elev_controller::Order{floor: 0});
