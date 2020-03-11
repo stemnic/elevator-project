@@ -7,6 +7,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use serde::*;
 use std::string;
 use std::time::Duration;
+use std::time::SystemTime;
 use std::vec;
 use std::collections::VecDeque;
 use std::thread;
@@ -18,6 +19,7 @@ pub struct Elev_Controller {
     queue: VecDeque<Order>,
     driver: ElevIo,
     stopped: bool,
+    door_state: door_floor_state,
     last_floor: Floor,
 }
 
@@ -26,6 +28,11 @@ pub struct ElevatorButtonEvent {
     pub action: ElevatorActions,
     pub floor: u8,
     pub origin: std::net::IpAddr
+}
+
+struct door_floor_state {
+    timestamp_open: SystemTime,
+    complete: bool
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -64,49 +71,66 @@ impl Elev_Controller {
         let elev_driver = ElevIo::new().expect("Connecting to elevator failed");
         init_elevator(&elev_driver);
         elev_driver.set_all_light(Light::Off).unwrap();
+        let sys_time = SystemTime::now();
+        let init_door_state = door_floor_state{timestamp_open: sys_time, complete: true} ;
         let current_floor = elev_driver.get_floor_signal().unwrap();
-        let controller = Elev_Controller{add_queue: queue_sender, recive_queue: queue_reciver, queue: que_obj, driver:elev_driver, stopped: false, last_floor: current_floor};
+        let controller = Elev_Controller{add_queue: queue_sender, recive_queue: queue_reciver, queue: que_obj, driver:elev_driver, stopped: false, door_state:  init_door_state, last_floor: current_floor};
         Ok(controller)
     }
     
     pub fn handle_order(&mut self) {
         if !self.stopped {
-           println!("[elev_controller]: {:?}", self.queue);
+            println!("[elev_controller]: {:?}", self.queue);
             match self.driver.get_floor_signal()
                         .expect("Get FloorSignal failed") {
                 Floor::At(c_floor) => {
-                    self.driver.set_floor_light(Floor::At(c_floor)).unwrap();
-                    match self.queue.front() {
-                        Some(order) => {
-                            println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
-                            if c_floor > order.floor{
-                                self.driver.set_motor_dir(MotorDir::Down).expect("Set MotorDir failed");
+                    if !self.door_state.complete {
+                        match self.door_state.timestamp_open.elapsed() {
+                            Ok(time) => {
+                                if time > Duration::from_secs(3) {                            
+                                    self.driver.set_door_light(Light::Off).unwrap();
+                                    self.door_state.complete = true;
+                                    println!("[elev_controller] Door closed");
+                                }
                             }
-                            if c_floor < order.floor{
-                                self.driver.set_motor_dir(MotorDir::Up).expect("Set MotorDir failed");
+                            Err(e) => {
+                                println!("[elev_controller]: Systime error occured {:?}", e);
                             }
-                            if c_floor == order.floor{
-                                self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
-                                self.queue.pop_front();
-                                self.open_door();
-                                match self.last_floor {
-                                    Floor::At(p_floor) => {
-                                        println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
-                                        if p_floor != c_floor {
+                        }
+                    } else {
+                        self.driver.set_floor_light(Floor::At(c_floor)).unwrap();
+                        match self.queue.front() {
+                            Some(order) => {
+                                //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
+                                if c_floor > order.floor{
+                                    self.driver.set_motor_dir(MotorDir::Down).expect("Set MotorDir failed");
+                                }
+                                if c_floor < order.floor{
+                                    self.driver.set_motor_dir(MotorDir::Up).expect("Set MotorDir failed");
+                                }
+                                if c_floor == order.floor{
+                                    self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
+                                    self.queue.pop_front();
+                                    self.open_door();
+                                    match self.last_floor {
+                                        Floor::At(p_floor) => {
+                                            //println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
+                                            if p_floor != c_floor {
+                                                self.last_floor = self.driver.get_floor_signal().unwrap();
+                                            }
+                                        }
+                                        Floor::Between => {
                                             self.last_floor = self.driver.get_floor_signal().unwrap();
                                         }
                                     }
-                                    Floor::Between => {
-                                        self.last_floor = self.driver.get_floor_signal().unwrap();
-                                    }
                                 }
                             }
-                        }
-                        None => {
-                            self.driver.set_motor_dir(MotorDir::Stop).unwrap();
+                            None => {
+                                self.driver.set_motor_dir(MotorDir::Stop).unwrap();
+                            }
                         }
                     }
-                    println!("[elev_controller] C: {:?}", c_floor);   
+                    //println!("[elev_controller] C: {:?}", c_floor);   
                 }
                 // TODO: Make elevator handle floor logic if it starts in between state
                 Floor::Between => {
@@ -170,9 +194,9 @@ impl Elev_Controller {
     fn open_door(&mut self) {
         self.driver.set_door_light(Light::On).unwrap();
         println!("[elev_controller] Door open");
-        sleep(Duration::from_secs(1)); // Should be somthing tickbased
-        self.driver.set_door_light(Light::Off).unwrap();
-        println!("[elev_controller] Door closed");
+        self.door_state.complete = false;
+        self.door_state.timestamp_open = SystemTime::now();
+
     }
 
     fn recive_order(&mut self) {
