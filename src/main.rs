@@ -27,6 +27,7 @@ fn main() {
         match reciver.try_recv() {
             Ok(value) => {
                 let new_order = elev_controller::Order{floor: value.floor};
+                controller.set_button_light_for_order(value.action, elev_driver::Floor::At(value.floor));
                 controller.add_order(new_order);
             }
             Err(_) => {}
