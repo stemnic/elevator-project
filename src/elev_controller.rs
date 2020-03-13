@@ -17,6 +17,7 @@ pub struct ElevController {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ElevatorButtonEvent {
+    pub request: RequestType,
     pub action: ElevatorActions,
     pub floor: u8,
     pub origin: std::net::IpAddr
@@ -33,6 +34,14 @@ pub enum ElevatorActions {
     LobbyUpcall,
     LobbyDowncall
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum RequestType {
+    Request,
+    Taken,
+    Complete
+}
+
 
 #[derive(Debug)]
 pub struct Order {
@@ -149,7 +158,7 @@ impl ElevController {
         for floor in 0..N_FLOORS {
             match self.driver.get_button_signal(Button::Internal(Floor::At(floor))).unwrap() {
                 Signal::High => {
-                    let data_block = ElevatorButtonEvent{action: ElevatorActions::Cabcall, floor: floor, origin:get_localip().unwrap() };
+                    let data_block = ElevatorButtonEvent{request: RequestType::Request, action: ElevatorActions::Cabcall, floor: floor, origin:get_localip().unwrap() };
                     broadcast.transmit(&data_block).unwrap();
                 }
                 Signal::Low => {
@@ -159,7 +168,7 @@ impl ElevController {
             if floor != (N_FLOORS-1) {
                 match self.driver.get_button_signal(Button::CallUp(Floor::At(floor))).expect("Unable to retrive hall up") {
                     Signal::High => {
-                        let data_block = ElevatorButtonEvent{action: ElevatorActions::LobbyUpcall, floor: floor, origin:get_localip().unwrap() };
+                        let data_block = ElevatorButtonEvent{request: RequestType::Request, action: ElevatorActions::LobbyUpcall, floor: floor, origin:get_localip().unwrap() };
                         broadcast.transmit(&data_block).unwrap();
                     }
                     Signal::Low => {
@@ -170,7 +179,7 @@ impl ElevController {
             if floor != 0 {
                 match self.driver.get_button_signal(Button::CallDown(Floor::At(floor))).expect("Unable to retrive hall down") {
                     Signal::High => {
-                        let data_block = ElevatorButtonEvent{action: ElevatorActions::LobbyDowncall, floor: floor, origin:get_localip().unwrap() };
+                        let data_block = ElevatorButtonEvent{request: RequestType::Request, action: ElevatorActions::LobbyDowncall, floor: floor, origin:get_localip().unwrap() };
                         broadcast.transmit(&data_block).unwrap();
                     }
                     Signal::Low => {
