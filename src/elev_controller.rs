@@ -15,7 +15,7 @@ pub struct ElevController {
     last_floor: Floor,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ElevatorButtonEvent {
     pub request: RequestType,
     pub action: ElevatorActions,
@@ -28,14 +28,14 @@ struct DoorFloorState {
     complete: bool
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum ElevatorActions {
     Cabcall,
     LobbyUpcall,
     LobbyDowncall
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum RequestType {
     Request,
     Taken,
@@ -43,9 +43,10 @@ pub enum RequestType {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Order {
-    pub floor: u8
+    pub floor: u8,
+    pub order_type: ElevatorActions,
 }
 
 pub const BCAST_PORT: u16 = 26665;

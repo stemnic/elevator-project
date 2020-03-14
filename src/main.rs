@@ -10,9 +10,9 @@ fn main() {
     println!("Starting");
     let mut controller = elev_controller::ElevController::new().unwrap();
     println!("Done init!");
-    controller.add_order(elev_controller::Order{floor: 3});
-    controller.add_order(elev_controller::Order{floor: 0});
-    controller.add_order(elev_controller::Order{floor: 2});
+    controller.add_order(elev_controller::Order{floor: 3, order_type: elev_controller::ElevatorActions::Cabcall});
+    controller.add_order(elev_controller::Order{floor: 0, order_type: elev_controller::ElevatorActions::Cabcall});
+    controller.add_order(elev_controller::Order{floor: 2, order_type: elev_controller::ElevatorActions::Cabcall});
     let (sender, reciver) = channel::<elev_controller::ElevatorButtonEvent>();
     thread::spawn(move || {
         let socket = network_rust::bcast::BcastReceiver::new(elev_controller::BCAST_PORT).unwrap();
@@ -26,7 +26,7 @@ fn main() {
         controller.check_buttons();
         match reciver.try_recv() {
             Ok(value) => {
-                let new_order = elev_controller::Order{floor: value.floor};
+                let new_order = elev_controller::Order{floor: value.floor, order_type: elev_controller::ElevatorActions::Cabcall};
                 controller.add_order(new_order);
             }
             Err(_) => {}
