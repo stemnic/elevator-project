@@ -110,6 +110,9 @@ impl ElevController {
                                     self.driver.set_motor_dir(MotorDir::Up).expect("Set MotorDir failed");
                                 }
                                 if c_floor == order.floor{
+                                    self.driver.set_button_light(Button::Internal(Floor::At(c_floor)), Light::Off);
+                                    self.driver.set_button_light(Button::CallDown(Floor::At(c_floor)), Light::Off);
+                                    self.driver.set_button_light(Button::CallUp(Floor::At(c_floor)), Light::Off);
                                     self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
                                     ElevController::complete_order_signal(order);
                                     self.queue.pop_front();
@@ -214,5 +217,19 @@ impl ElevController {
         let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
         let data_block = ElevatorButtonEvent{request: RequestType::Taken, action: order_copy.order_type, floor: order_copy.floor, origin:get_localip().unwrap() };
         broadcast.transmit(&data_block).unwrap();
+    }
+
+    pub fn set_button_light_for_order(&mut self, action: ElevatorActions, floor: Floor) {
+        match action {
+            ElevatorActions::Cabcall =>{
+                self.driver.set_button_light(Button::Internal(floor), Light::On);
+            }
+            ElevatorActions::LobbyUpcall =>{
+                self.driver.set_button_light(Button::CallUp(floor), Light::On);
+            }
+            ElevatorActions::LobbyDowncall =>{
+                self.driver.set_button_light(Button::CallDown(floor), Light::On);
+            }
+        }
     }
 }
