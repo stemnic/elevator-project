@@ -90,6 +90,8 @@ impl TaskManager {
     }
 
     pub fn run_task_state_machine(&mut self) {
+        self.elevator.handle_order();
+        self.elevator.check_buttons();
         let tasks_copy = self.task_list.to_vec(); // This will make a copy of task_list before it iterates through it, the disadvantage here is that there is an delay in reactions in the cost function
         for task in &mut self.task_list {
             println!("[tasks] {:?}", task);
