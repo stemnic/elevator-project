@@ -15,7 +15,7 @@ pub struct ElevController {
     last_floor: Floor,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ElevatorButtonEvent {
     pub request: RequestType,
     pub action: ElevatorActions,
@@ -28,14 +28,14 @@ struct DoorFloorState {
     complete: bool
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub enum ElevatorActions {
     Cabcall,
     LobbyUpcall,
     LobbyDowncall
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum RequestType {
     Request,
     Taken,
@@ -43,9 +43,10 @@ pub enum RequestType {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Order {
-    pub floor: u8
+    pub floor: u8,
+    pub order_type: ElevatorActions,
 }
 
 pub const BCAST_PORT: u16 = 26665;
@@ -110,6 +111,7 @@ impl ElevController {
                                 }
                                 if c_floor == order.floor{
                                     self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
+                                    ElevController::complete_order_signal(order);
                                     self.queue.pop_front();
                                     self.open_door();
                                     match self.last_floor {
@@ -199,7 +201,18 @@ impl ElevController {
 
     }
 
+    fn complete_order_signal(order: &Order) {
+        let order_copy = order.clone();
+        let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
+        let data_block = ElevatorButtonEvent{request: RequestType::Complete, action: order_copy.order_type, floor: order_copy.floor, origin:get_localip().unwrap() };
+        broadcast.transmit(&data_block).unwrap();
+    }
+
     pub fn add_order(&mut self, order: Order) {
+        let order_copy = order.clone();
         self.queue.push_back(order);
+        let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
+        let data_block = ElevatorButtonEvent{request: RequestType::Taken, action: order_copy.order_type, floor: order_copy.floor, origin:get_localip().unwrap() };
+        broadcast.transmit(&data_block).unwrap();
     }
 }
