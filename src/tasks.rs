@@ -34,7 +34,7 @@ enum TaskStatemachineStates {
     complete,
 }
 
-struct TaskManager {
+pub struct TaskManager {
     elevator: elev_controller::ElevController,
     task_list: Vec<Task>,
 }
