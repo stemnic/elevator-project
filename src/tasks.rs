@@ -73,9 +73,26 @@ impl TaskManager {
         }
     }
 
+    pub fn set_task_taken(&mut self, order: elev_controller::Order) {
+        for task in &mut self.task_list {
+            if task.order == order {
+                task.taken = true;
+            }
+        }
+    }
+
+    pub fn set_task_complete(&mut self, order: elev_controller::Order) {
+        for task in &mut self.task_list {
+            if task.order == order {
+                task.complete = true;
+            }
+        }
+    }
+
     pub fn run_task_state_machine(&mut self) {
         let tasks_copy = self.task_list.to_vec(); // This will make a copy of task_list before it iterates through it, the disadvantage here is that there is an delay in reactions in the cost function
         for task in &mut self.task_list {
+            println!("[tasks] {:?}", task);
             match task.state {
                 TaskStatemachineStates::new => {
                     task.state = TaskStatemachineStates::cost_take;
@@ -85,6 +102,8 @@ impl TaskManager {
                 TaskStatemachineStates::cost_take => {
                     if task.taken {
                         task.state = TaskStatemachineStates::cost_complete;
+                        task.task_delay.current_time = SystemTime::now();
+                        task.task_delay.waiting_time = TaskManager::cost_function_delay_complete(&task.order, &tasks_copy); 
                     } else if task.task_delay.current_time.elapsed().unwrap() > task.task_delay.waiting_time {
                         task.state = TaskStatemachineStates::take;
                     }
@@ -96,7 +115,11 @@ impl TaskManager {
                     task.state = TaskStatemachineStates::check_complete;
                 }
                 TaskStatemachineStates::cost_complete => {
-    
+                    if task.complete {
+                        task.state = TaskStatemachineStates::complete;
+                    } else if task.task_delay.current_time.elapsed().unwrap() > task.task_delay.waiting_time {
+                        task.state = TaskStatemachineStates::take;
+                    }
                 }
                 TaskStatemachineStates::check_complete => {
                     if task.complete {
