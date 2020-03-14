@@ -111,6 +111,7 @@ impl ElevController {
                                 }
                                 if c_floor == order.floor{
                                     self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
+                                    ElevController::complete_order_signal(order);
                                     self.queue.pop_front();
                                     self.open_door();
                                     match self.last_floor {
@@ -200,7 +201,18 @@ impl ElevController {
 
     }
 
+    fn complete_order_signal(order: &Order) {
+        let order_copy = order.clone();
+        let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
+        let data_block = ElevatorButtonEvent{request: RequestType::Complete, action: order_copy.order_type, floor: order_copy.floor, origin:get_localip().unwrap() };
+        broadcast.transmit(&data_block).unwrap();
+    }
+
     pub fn add_order(&mut self, order: Order) {
+        let order_copy = order.clone();
         self.queue.push_back(order);
+        let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
+        let data_block = ElevatorButtonEvent{request: RequestType::Taken, action: order_copy.order_type, floor: order_copy.floor, origin:get_localip().unwrap() };
+        broadcast.transmit(&data_block).unwrap();
     }
 }

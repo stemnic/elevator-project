@@ -94,7 +94,7 @@ impl TaskManager {
         self.elevator.check_buttons();
         let tasks_copy = self.task_list.to_vec(); // This will make a copy of task_list before it iterates through it, the disadvantage here is that there is an delay in reactions in the cost function
         for task in &mut self.task_list {
-            println!("[tasks] {:?}", task);
+            //println!("[tasks] {:?}", task);
             match task.state {
                 TaskStatemachineStates::new => {
                     task.state = TaskStatemachineStates::cost_take;
@@ -130,7 +130,7 @@ impl TaskManager {
     
                 }
                 TaskStatemachineStates::complete => {
-    
+                    //println!("[tasks] Completed {:?}", task);
                 }
             }
         }
@@ -138,7 +138,7 @@ impl TaskManager {
 
     fn cost_function_delay_take(task_order: &elev_controller::Order, task_queue: &Vec<Task>) -> Duration {
         // Cost function Wodo magic
-        Duration::from_secs(2)
+        Duration::from_millis(10)
     }
     fn cost_function_delay_complete(task_order: &elev_controller::Order, task_queue: &Vec<Task>) -> Duration {
         // Cost function Wodo magic
