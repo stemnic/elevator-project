@@ -26,12 +26,12 @@ struct CostFunctionDelay {
 
 #[derive(Clone, Debug)]
 enum TaskStatemachineStates {
-    new,
-    cost_take,
-    take,
-    cost_complete,
-    check_complete,
-    complete,
+    New,
+    CostTake,
+    Take,
+    CostComplete,
+    CheckComplete,
+    Complete,
 }
 
 pub struct TaskManager {
@@ -42,7 +42,7 @@ pub struct TaskManager {
 impl Task {
     pub fn new(order: elev_controller::Order, ip_origin: std::net::IpAddr) -> io::Result<Self> {
         let default_delay = CostFunctionDelay {current_time: SystemTime::now(), waiting_time: Duration::from_secs(1)};
-        let task = Task {order: order, state: TaskStatemachineStates::new, taken: false, complete: false, task_delay: default_delay, ip_origin: ip_origin};
+        let task = Task {order: order, state: TaskStatemachineStates::New, taken: false, complete: false, task_delay: default_delay, ip_origin: ip_origin};
         Ok(task)
     }
 }
@@ -64,7 +64,7 @@ impl TaskManager {
                 if task.complete {
                     task.complete = false;
                     task.taken = false;
-                    task.state = TaskStatemachineStates::new;
+                    task.state = TaskStatemachineStates::New;
                 }
             }
         }
@@ -96,40 +96,40 @@ impl TaskManager {
         for task in &mut self.task_list {
             //println!("[tasks] {:?}", task);
             match task.state {
-                TaskStatemachineStates::new => {
-                    task.state = TaskStatemachineStates::cost_take;
+                TaskStatemachineStates::New => {
+                    task.state = TaskStatemachineStates::CostTake;
                     task.task_delay.current_time = SystemTime::now();
                     task.task_delay.waiting_time = TaskManager::cost_function_delay_take(&task.order, &tasks_copy); 
                 }
-                TaskStatemachineStates::cost_take => {
+                TaskStatemachineStates::CostTake => {
                     if task.taken {
-                        task.state = TaskStatemachineStates::cost_complete;
+                        task.state = TaskStatemachineStates::CostComplete;
                         task.task_delay.current_time = SystemTime::now();
                         task.task_delay.waiting_time = TaskManager::cost_function_delay_complete(&task.order, &tasks_copy); 
                     } else if task.task_delay.current_time.elapsed().unwrap() > task.task_delay.waiting_time {
-                        task.state = TaskStatemachineStates::take;
+                        task.state = TaskStatemachineStates::Take;
                     }
     
                 }
-                TaskStatemachineStates::take => {
+                TaskStatemachineStates::Take => {
                     let order_clone = task.order.clone();
                     self.elevator.add_order(order_clone);
-                    task.state = TaskStatemachineStates::check_complete;
+                    task.state = TaskStatemachineStates::CheckComplete;
                 }
-                TaskStatemachineStates::cost_complete => {
+                TaskStatemachineStates::CostComplete => {
                     if task.complete {
-                        task.state = TaskStatemachineStates::complete;
+                        task.state = TaskStatemachineStates::Complete;
                     } else if task.task_delay.current_time.elapsed().unwrap() > task.task_delay.waiting_time {
-                        task.state = TaskStatemachineStates::take;
+                        task.state = TaskStatemachineStates::Take;
                     }
                 }
-                TaskStatemachineStates::check_complete => {
+                TaskStatemachineStates::CheckComplete => {
                     if task.complete {
-                        task.state = TaskStatemachineStates::complete;
+                        task.state = TaskStatemachineStates::Complete;
                     }
     
                 }
-                TaskStatemachineStates::complete => {
+                TaskStatemachineStates::Complete => {
                     //println!("[tasks] Completed {:?}", task);
                 }
             }
