@@ -81,7 +81,7 @@ impl ElevController {
     
     pub fn handle_order(&mut self) {
         if !self.stopped {
-            println!("[elev_controller]: {:?}", self.queue);
+            //println!("[elev_controller]: {:?}", self.queue);
             match self.driver.get_floor_signal()
                         .expect("Get FloorSignal failed") {
                 Floor::At(c_floor) => {
@@ -110,20 +110,23 @@ impl ElevController {
                                     self.driver.set_motor_dir(MotorDir::Up).expect("Set MotorDir failed");
                                 }
                                 if c_floor == order.floor{
+                                    self.driver.set_button_light(Button::Internal(Floor::At(c_floor)), Light::Off);
+                                    self.driver.set_button_light(Button::CallDown(Floor::At(c_floor)), Light::Off);
+                                    self.driver.set_button_light(Button::CallUp(Floor::At(c_floor)), Light::Off);
                                     self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
-                                    ElevController::complete_order_signal(order);
+                                    self.complete_order_signal(order);
                                     self.queue.pop_front();
                                     self.open_door();
-                                    match self.last_floor {
-                                        Floor::At(p_floor) => {
-                                            //println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
-                                            if p_floor != c_floor {
-                                                self.last_floor = self.driver.get_floor_signal().unwrap();
-                                            }
-                                        }
-                                        Floor::Between => {
+                                }
+                                match self.last_floor {
+                                    Floor::At(p_floor) => {
+                                        //println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
+                                        if p_floor != c_floor {
                                             self.last_floor = self.driver.get_floor_signal().unwrap();
                                         }
+                                    }
+                                    Floor::Between => {
+                                        self.last_floor = self.driver.get_floor_signal().unwrap();
                                     }
                                 }
                             }
@@ -151,6 +154,29 @@ impl ElevController {
                     self.driver.set_stop_light(Light::On).unwrap();
                 }
                 Signal::Low => {}
+            }
+        }
+    }
+
+    pub fn get_current_floor(&self) -> isize {
+        
+        match self.driver.get_floor_signal().unwrap() {
+            Floor::At(num) => {
+                num as isize
+            }
+            Floor::Between => {
+                -1
+            }
+        }
+    }
+
+    pub fn get_last_floor(&self) -> isize {
+        match self.last_floor {
+            Floor::At(num) => {
+                num as isize
+            }
+            Floor::Between => {
+                -1
             }
         }
     }
@@ -195,24 +221,45 @@ impl ElevController {
 
     fn open_door(&mut self) {
         self.driver.set_door_light(Light::On).unwrap();
-        println!("[elev_controller] Door open");
+        println!("[elev_controller]: Door open");
         self.door_state.complete = false;
         self.door_state.timestamp_open = SystemTime::now();
 
     }
 
-    fn complete_order_signal(order: &Order) {
+    fn complete_order_signal(&self, order: &Order) {
         let order_copy = order.clone();
-        let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
-        let data_block = ElevatorButtonEvent{request: RequestType::Complete, action: order_copy.order_type, floor: order_copy.floor, origin:get_localip().unwrap() };
-        broadcast.transmit(&data_block).unwrap();
+        self.broadcast_order(order_copy, RequestType::Complete, get_localip().unwrap());
     }
 
     pub fn add_order(&mut self, order: Order) {
         let order_copy = order.clone();
         self.queue.push_back(order);
+        self.broadcast_order(order_copy, RequestType::Taken, get_localip().unwrap());
+    }
+
+    pub fn broadcast_order(&self, order: Order, request: RequestType, origin: std::net::IpAddr) {
         let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
-        let data_block = ElevatorButtonEvent{request: RequestType::Taken, action: order_copy.order_type, floor: order_copy.floor, origin:get_localip().unwrap() };
+        let data_block = ElevatorButtonEvent{request: request, action: order.order_type, floor: order.floor, origin:origin };
         broadcast.transmit(&data_block).unwrap();
+    }
+
+    pub fn get_order_list(&self) -> VecDeque<Order> {
+        let order_queue = self.queue.clone();
+        order_queue
+    }
+
+    pub fn set_button_light_for_order(&mut self, action: ElevatorActions, floor: Floor) {
+        match action {
+            ElevatorActions::Cabcall =>{
+                self.driver.set_button_light(Button::Internal(floor), Light::On);
+            }
+            ElevatorActions::LobbyUpcall =>{
+                self.driver.set_button_light(Button::CallUp(floor), Light::On);
+            }
+            ElevatorActions::LobbyDowncall =>{
+                self.driver.set_button_light(Button::CallDown(floor), Light::On);
+            }
+        }
     }
 }

@@ -27,6 +27,7 @@ fn main() {
         controller.check_buttons();
         match reciver.try_recv() {
             Ok(value) => {
+                controller.set_button_light_for_order(value.action, elev_driver::Floor::At(value.floor));
                 let new_order = elev_controller::Order{floor: value.floor, order_type: elev_controller::ElevatorActions::Cabcall};
                 controller.add_order(new_order);
             }
