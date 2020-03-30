@@ -221,13 +221,13 @@ impl TaskManager {
                     }
                 }
 
-                let mut delay = Duration::from_millis(500/(score as u64));
+                let mut delay = Duration::from_millis(5000/(score as u64));
 
                 delay
             }
             None => {
                 //There is no other orders in the elevator
-                let mut delay = 5;
+                let mut delay = 50;
                 if task_order.ip_origin == get_localip().unwrap() {
                     delay = 1
                 }
