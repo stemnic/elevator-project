@@ -255,7 +255,7 @@ impl TaskManager {
 
     fn cost_function_delay_complete(task_order: &Task, task_queue: &Vec<Task>, elev_queue: &VecDeque<elev_controller::Order>, current_floor: isize, last_floor: isize) -> Duration {
         // Cost function Wodo magic
-        Duration::from_secs(2)
+        Duration::from_secs(elev_driver::N_FLOORS as u64 * 3) + TaskManager::cost_function_delay_take(task_order, task_queue, elev_queue, current_floor, last_floor)
     }
 }
 
