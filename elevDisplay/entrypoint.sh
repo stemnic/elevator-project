@@ -1,8 +1,8 @@
 #!/bin/sh
 
-echo "Waiting 1 second for elevators to come online"
+echo "Waiting 3 seconds for elevators to come online"
 subnetprefix=`hostname -I | grep -P "^\d+\.\d+\.\d+" -o`
-sleep 1
+sleep 3
 num=`nmap -sS -p 22 --open $subnetprefix.0/24 -oG - | grep 22 | grep Host | grep -oP "\d+\.\d+\.\d+\.\d+" | wc -l`
 echo "Discovered $(expr $num - 1) elevators, connecting..."
 num=$(( $num + 0 ))
