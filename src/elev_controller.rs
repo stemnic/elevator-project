@@ -69,7 +69,7 @@ fn init_elevator(elev_io: &ElevIo) {
 impl ElevController {
     pub fn new() -> io::Result<Self> {
         let que_obj: VecDeque<Order> = VecDeque::new();
-        let elev_driver = ElevIo::new().expect("Connecting to elevator failed");
+        let elev_driver = ElevIo::new(DEFAULT_IP_ADDRESS, DEFAULT_PORT).expect("Connecting to elevator failed");
         init_elevator(&elev_driver);
         elev_driver.set_all_light(Light::Off).unwrap();
         let sys_time = SystemTime::now();
