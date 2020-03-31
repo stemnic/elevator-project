@@ -110,9 +110,6 @@ impl ElevController {
                                     self.driver.set_motor_dir(MotorDir::Up).expect("Set MotorDir failed");
                                 }
                                 if c_floor == order.floor{
-                                    self.driver.set_button_light(Button::Internal(Floor::At(c_floor)), Light::Off);
-                                    self.driver.set_button_light(Button::CallDown(Floor::At(c_floor)), Light::Off);
-                                    self.driver.set_button_light(Button::CallUp(Floor::At(c_floor)), Light::Off);
                                     self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
                                     self.complete_order_signal(order);
                                     self.queue.pop_front();
@@ -249,16 +246,16 @@ impl ElevController {
         order_queue
     }
 
-    pub fn set_button_light_for_order(&mut self, action: ElevatorActions, floor: Floor) {
+    pub fn set_button_light_for_order(&mut self, action: &ElevatorActions, floor: Floor, light: Light) {
         match action {
             ElevatorActions::Cabcall =>{
-                self.driver.set_button_light(Button::Internal(floor), Light::On);
+                self.driver.set_button_light(Button::Internal(floor), light).unwrap();
             }
             ElevatorActions::LobbyUpcall =>{
-                self.driver.set_button_light(Button::CallUp(floor), Light::On);
+                self.driver.set_button_light(Button::CallUp(floor), light).unwrap();
             }
             ElevatorActions::LobbyDowncall =>{
-                self.driver.set_button_light(Button::CallDown(floor), Light::On);
+                self.driver.set_button_light(Button::CallDown(floor), light).unwrap();
             }
         }
     }

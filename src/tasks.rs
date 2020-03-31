@@ -129,6 +129,7 @@ impl TaskManager {
                         task.state = TaskStatemachineStates::CostTake;
                         task.task_delay.current_time = SystemTime::now();
                         task.task_delay.waiting_time = TaskManager::cost_function_delay_take(&task, &tasks_copy, &self.elevator.get_order_list(), self.elevator.get_current_floor(), self.elevator.get_last_floor());
+                        self.elevator.set_button_light_for_order(&task.order.order_type, elev_driver::Floor::At(task.order.floor), elev_driver::Light::On);
                         println!("[tasks] {:?}", task);
                     }
                 }
@@ -174,6 +175,7 @@ impl TaskManager {
                 }
                 TaskStatemachineStates::Complete => {
                     //println!("[tasks] Completed {:?}", task);
+                    self.elevator.set_button_light_for_order(&task.order.order_type, elev_driver::Floor::At(task.order.floor), elev_driver::Light::Off);
                 }
             }
         }
