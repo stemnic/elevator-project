@@ -1,0 +1,12 @@
+version: "2.4"
+services:
+    elevator:
+        build: .
+        scale: 3
+
+    display:
+        build: ./elevDisplay
+        depends_on: 
+            - elevator
+        container_name: elevDisplay
+        
