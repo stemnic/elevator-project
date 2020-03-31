@@ -10,8 +10,10 @@ Each elevator (server and simulator) lives in it's owm container and are connect
 ### Running the server
 Defaults to 3 elevators
 ```
+docker-compose build
 docker-compose up
 ```
+`docker-compose build` needs to be run every time there is a change to the source files. 
 Optionally you can specify the number of elevators you want
 ```
 docker-compose up --scale elevator=(number)
