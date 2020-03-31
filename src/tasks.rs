@@ -8,6 +8,7 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::collections::VecDeque;
 use rand::prelude::*;
+use rand::Rng;
 
 use crate::elev_controller;
 
@@ -130,16 +131,18 @@ impl TaskManager {
                         task.task_delay.current_time = SystemTime::now();
                         task.task_delay.waiting_time = TaskManager::cost_function_delay_take(&task, &tasks_copy, &self.elevator.get_order_list(), self.elevator.get_current_floor(), self.elevator.get_last_floor());
                         self.elevator.set_button_light_for_order(&task.order.order_type, elev_driver::Floor::At(task.order.floor), elev_driver::Light::On);
-                        println!("[tasks] {:?}", task);
+                        println!("[task] Take delay {:?} {:?}", task.order, task.task_delay.waiting_time);
                     }
                 }
                 TaskStatemachineStates::CostTake => {
                     if task.taken {
+                        println!("[task]: Taken {:?}", task.order);
                         task.state = TaskStatemachineStates::CostComplete;
                         task.task_delay.current_time = SystemTime::now();
                         task.task_delay.waiting_time = TaskManager::cost_function_delay_complete(&task, &tasks_copy, &self.elevator.get_order_list(), self.elevator.get_current_floor(), self.elevator.get_last_floor()); 
                     } else if task.task_delay.current_time.elapsed().unwrap() > task.task_delay.waiting_time {
                         task.state = TaskStatemachineStates::Take;
+                        println!("[task]: Taking {:?}", task.order);
                     }
     
                 }
@@ -147,8 +150,9 @@ impl TaskManager {
                     if task.complete {
                         task.state = TaskStatemachineStates::Complete;
                     } else {
-                        // Spam order on UDP every 3rd secound
-                        if task.task_delay.current_time.elapsed().unwrap() > Duration::from_secs(3) {
+                        // Spam order on UDP every 10th secound
+                        if task.task_delay.current_time.elapsed().unwrap() > Duration::from_secs(10) {
+                            println!("[task]: Spamming UDP {:?} {:?}", task.order, task.ip_origin);
                             task.task_delay.current_time = SystemTime::now();
                             let order_clone = task.order.clone();
                             self.elevator.broadcast_order(order_clone, elev_controller::RequestType::Request, task.ip_origin);
@@ -164,6 +168,7 @@ impl TaskManager {
                     if task.complete {
                         task.state = TaskStatemachineStates::Complete;
                     } else if task.task_delay.current_time.elapsed().unwrap() > task.task_delay.waiting_time {
+                        println!("[task]: Taking uncomplete task {:?} {:?}", task.order, task.ip_origin);
                         task.state = TaskStatemachineStates::Take;
                     }
                 }
@@ -189,6 +194,17 @@ impl TaskManager {
         //println!("Current Task: {:?}\n task_queue: {:?}\n elev_queue {:?}", task_order, task_queue, elev_queue);
         let mut rng = thread_rng();
         let mut score = 0; // Higher is better
+        println!("[COST_DEBUG]: {:?}", task_order);
+        let mut number_of_others_tasks = 0;
+        let mut number_of_elevator_orders = 0;
+        for task in task_queue {
+            if task.state == TaskStatemachineStates::CostTake || task.state == TaskStatemachineStates::New {
+                number_of_others_tasks += 1;
+            }
+        }
+        for elev_orders in elev_queue {
+            number_of_elevator_orders += 1;
+        }
         match elev_queue.front() {
             Some(elev_current_doing) => {
                 //There are other orders in the elevator
@@ -222,24 +238,25 @@ impl TaskManager {
                         }
                     }
                 }
-
-                let mut delay = Duration::from_millis(5000/(score as u64));
-
+                score = score - 20 * number_of_elevator_orders;
+                if score < 1 {
+                    score = 1;
+                }
+                println!("[COST_DEBUG]: score_some_queue {:?} other_tasks {:?} elev_orders {:?}", score, number_of_others_tasks, number_of_elevator_orders);
+                let delay = Duration::from_millis(5000/(score as u64));
+                println!("[COST_DEBUG]: delay {:?}", delay);
                 delay
             }
             None => {
                 //There is no other orders in the elevator
-                let mut delay = 50;
+                let mut delay = 2000;
+                let random_number = rand::thread_rng().gen::<u8>();
+                delay += (random_number as u64) * 5;
                 if task_order.ip_origin == get_localip().unwrap() {
                     delay = 1
                 }
-                let mut number_of_others = 0;
-                for task in task_queue {
-                    if task.state == TaskStatemachineStates::CostTake || task.state == TaskStatemachineStates::New {
-                        number_of_others += 1;
-                    }
-                }
-                delay += number_of_others;
+                delay += number_of_others_tasks*500;
+                println!("[COST_DEBUG]: no_queue {:?}", delay);
                 Duration::from_millis(delay)
             }
         }
