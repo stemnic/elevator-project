@@ -12,7 +12,7 @@ use rand::Rng;
 
 use crate::elev_controller;
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 struct Task {
     order: elev_controller::Order,
     state: TaskStatemachineStates,
@@ -22,7 +22,7 @@ struct Task {
     ip_origin: std::net::IpAddr,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 struct CostFunctionDelay {
     current_time: SystemTime,
     waiting_time: Duration,
@@ -118,6 +118,7 @@ impl TaskManager {
     pub fn run_task_state_machine(&mut self) {
         self.elevator.handle_order();
         self.elevator.check_buttons();
+        let mut task_delete_cleanup: std::vec::Vec<Task> = vec![];
         let tasks_copy = self.task_list.to_vec(); // This will make a copy of task_list before it iterates through it, the disadvantage here is that there is an delay in reactions in the cost function
         for task in &mut self.task_list {
             //println!("[tasks] {:?}", task);
@@ -180,9 +181,17 @@ impl TaskManager {
                 }
                 TaskStatemachineStates::Complete => {
                     //println!("[tasks] Completed {:?}", task);
-                    self.elevator.set_button_light_for_order(&task.order.order_type, elev_driver::Floor::At(task.order.floor), elev_driver::Light::Off);
+                    if (task.order.order_type == elev_controller::ElevatorActions::Cabcall && task.ip_origin == get_localip().unwrap()) || task.order.order_type != elev_controller::ElevatorActions::Cabcall {
+                        println!("[task]: turning off {:?} ", task.order);
+                        self.elevator.set_button_light_for_order(&task.order.order_type, elev_driver::Floor::At(task.order.floor), elev_driver::Light::Off);
+                    }
+                    task_delete_cleanup.push(task.clone());
                 }
             }
+        }
+        for task in task_delete_cleanup {
+            let index = self.task_list.iter().position(|x| *x == task).unwrap();
+            self.task_list.remove(index);
         }
     }
 
