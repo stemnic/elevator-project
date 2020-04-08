@@ -226,7 +226,7 @@ impl TaskManager {
                         if direction == Direction::Down && last_floor > task_order.order.floor as isize {
                             // Elevator moving to order /w same direction
                             score = (elev_driver::N_FLOORS as isize + 2) - (task_order.order.floor as isize - last_floor).abs();
-                        } else if direction == Direction::Up && last_floor > task_order.order.floor as isize {
+                        } else if direction == Direction::Up && last_floor < task_order.order.floor as isize {
                             // Elevator moving to order /w opposit direction
                             score = (elev_driver::N_FLOORS as isize + 1) - (task_order.order.floor as isize - last_floor).abs();
                         } else {
@@ -238,7 +238,7 @@ impl TaskManager {
                         if direction == Direction::Up && last_floor < task_order.order.floor as isize {
                             // Elevator moving to order /w same direction
                             score = (elev_driver::N_FLOORS as isize + 2) - (task_order.order.floor as isize - last_floor).abs();
-                        } else if direction == Direction::Down && last_floor < task_order.order.floor as isize {
+                        } else if direction == Direction::Down && last_floor > task_order.order.floor as isize {
                             // Elevator moving to order /w opposit direction
                             score = (elev_driver::N_FLOORS as isize + 1) - (task_order.order.floor as isize - last_floor).abs();
                         } else {
