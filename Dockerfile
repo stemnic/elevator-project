@@ -9,6 +9,7 @@ RUN wget https://github.com/TTK4145/Simulator-v2/releases/download/v1.5/SimEleva
 
 COPY src ./src
 COPY Cargo.toml .
+COPY .tmux.conf /home/elev/
 
 RUN cargo install --path .
 
