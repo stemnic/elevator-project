@@ -25,10 +25,10 @@ fn main() {
                         taskmanager.add_new_task(elev_controller::Order {order_type: data.action, floor: data.floor}, data.origin);
                     }
                     elev_controller::RequestType::Taken => {
-                        taskmanager.set_task_taken(elev_controller::Order {order_type: data.action, floor: data.floor});
+                        taskmanager.set_task_taken(elev_controller::Order {order_type: data.action, floor: data.floor}, data.origin);
                     }
                     elev_controller::RequestType::Complete => {
-                        taskmanager.set_task_complete(elev_controller::Order {order_type: data.action, floor: data.floor});
+                        taskmanager.set_task_complete(elev_controller::Order {order_type: data.action, floor: data.floor}, data.origin);
                     }
                 }
             }

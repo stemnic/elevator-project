@@ -71,26 +71,9 @@ impl TaskManager {
         let mut exist = false;
         for task in &mut self.task_list {
             if task.order == new_task.order {
-                if task.order.order_type == elev_controller::ElevatorActions::Cabcall {
-                    if task.ip_origin == ip_origin {
-                        exist = true;
-                        if task.complete {
-                            task.complete = false;
-                            task.taken = false;
-                            task.state = TaskStatemachineStates::New;
-                            task.ip_origin = ip_origin;
-                        }
-                    } else {
-                        exist = false;
-                    }
-                } else {
-                    exist = true;
-                    if task.complete {
-                        task.complete = false;
-                        task.taken = false;
-                        task.state = TaskStatemachineStates::New;
-                        task.ip_origin = ip_origin;
-                    }
+                exist = true;
+                if new_task.order.order_type == elev_controller::ElevatorActions::Cabcall && task.ip_origin != new_task.ip_origin {
+                    exist = false;
                 }
             }
         }
@@ -99,17 +82,21 @@ impl TaskManager {
         }
     }
 
-    pub fn set_task_taken(&mut self, order: elev_controller::Order) {
+    pub fn set_task_taken(&mut self, order: elev_controller::Order, ip_origin: std::net::IpAddr) {
         for task in &mut self.task_list {
-            if task.order == order {
+            if task.order == order && order.order_type != elev_controller::ElevatorActions::Cabcall {
+                task.taken = true;
+            } else if task.order == order && order.order_type == elev_controller::ElevatorActions::Cabcall && task.ip_origin == ip_origin {
                 task.taken = true;
             }
         }
     }
 
-    pub fn set_task_complete(&mut self, order: elev_controller::Order) {
+    pub fn set_task_complete(&mut self, order: elev_controller::Order, ip_origin: std::net::IpAddr) {
         for task in &mut self.task_list {
-            if task.order == order {
+            if task.order == order && order.order_type != elev_controller::ElevatorActions::Cabcall {
+                task.complete = true;
+            } else if task.order == order && order.order_type == elev_controller::ElevatorActions::Cabcall && task.ip_origin == ip_origin {
                 task.complete = true;
             }
         }
@@ -182,7 +169,7 @@ impl TaskManager {
                 TaskStatemachineStates::Complete => {
                     //println!("[tasks] Completed {:?}", task);
                     if (task.order.order_type == elev_controller::ElevatorActions::Cabcall && task.ip_origin == get_localip().unwrap()) || task.order.order_type != elev_controller::ElevatorActions::Cabcall {
-                        println!("[task]: turning off {:?} ", task.order);
+                        println!("[task]: turning off {:?} {:?}", task.order, task.ip_origin);
                         self.elevator.set_button_light_for_order(&task.order.order_type, elev_driver::Floor::At(task.order.floor), elev_driver::Light::Off);
                     }
                     task_delete_cleanup.push(task.clone());
