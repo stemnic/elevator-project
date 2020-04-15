@@ -98,6 +98,8 @@ impl ElevController {
                     }
                 } else {
                     self.driver.set_floor_light(Floor::At(c_floor)).unwrap();
+                    let mut clear_orders_at_floor: std::vec::Vec<Order> = vec![]; //used to clear all orders at the floor the elevator arrives at
+                    let queue_clone=self.queue.clone();
                     match self.queue.front() {
                         Some(order) => {
                             //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
@@ -109,8 +111,12 @@ impl ElevController {
                             }
                             if c_floor == order.floor{
                                 self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
+                                for task in queue_clone{
+                                    if task.floor ==c_floor{
+                                    clear_orders_at_floor.push(task.clone());
+                                    }
+                                }
                                 self.complete_order_signal(order);
-                                self.queue.pop_front();
                                 self.open_door();
                             }
                             match self.last_floor {
@@ -128,6 +134,11 @@ impl ElevController {
                         None => {
                             self.driver.set_motor_dir(MotorDir::Stop).unwrap();
                         }
+                    }
+                    for task in clear_orders_at_floor {
+                        let index = self.queue.iter().position(|x| *x == task).unwrap();
+                        self.queue.remove(index);
+                        self.complete_order_signal(&task);
                     }
                 }
                 //println!("[elev_controller] C: {:?}", c_floor);   
