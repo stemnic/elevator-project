@@ -80,78 +80,75 @@ impl ElevController {
     }
     
     pub fn handle_order(&mut self) {
-        if !self.stopped {
-            //println!("[elev_controller]: {:?}", self.queue);
-            match self.driver.get_floor_signal()
-                        .expect("Get FloorSignal failed") {
-                Floor::At(c_floor) => {
-                    if !self.door_state.complete {
-                        match self.door_state.timestamp_open.elapsed() {
-                            Ok(time) => {
-                                if time > Duration::from_secs(3) {                            
-                                    self.driver.set_door_light(Light::Off).unwrap();
-                                    self.door_state.complete = true;
-                                    println!("[elev_controller] Door closed");
-                                }
-                            }
-                            Err(e) => {
-                                println!("[elev_controller]: Systime error occured {:?}", e);
+        match self.driver.get_floor_signal()
+                    .expect("Get FloorSignal failed") {
+            Floor::At(c_floor) => {
+                if !self.door_state.complete {
+                    match self.door_state.timestamp_open.elapsed() {
+                        Ok(time) => {
+                            if time > Duration::from_secs(3) {                            
+                                self.driver.set_door_light(Light::Off).unwrap();
+                                self.door_state.complete = true;
+                                println!("[elev_controller] Door closed");
                             }
                         }
-                    } else {
-                        self.driver.set_floor_light(Floor::At(c_floor)).unwrap();
-                        match self.queue.front() {
-                            Some(order) => {
-                                //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
-                                if c_floor > order.floor{
-                                    self.driver.set_motor_dir(MotorDir::Down).expect("Set MotorDir failed");
-                                }
-                                if c_floor < order.floor{
-                                    self.driver.set_motor_dir(MotorDir::Up).expect("Set MotorDir failed");
-                                }
-                                if c_floor == order.floor{
-                                    self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
-                                    self.complete_order_signal(order);
-                                    self.queue.pop_front();
-                                    self.open_door();
-                                }
-                                match self.last_floor {
-                                    Floor::At(p_floor) => {
-                                        //println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
-                                        if p_floor != c_floor {
-                                            self.last_floor = self.driver.get_floor_signal().unwrap();
-                                        }
-                                    }
-                                    Floor::Between => {
+                        Err(e) => {
+                            println!("[elev_controller]: Systime error occured {:?}", e);
+                        }
+                    }
+                } else {
+                    self.driver.set_floor_light(Floor::At(c_floor)).unwrap();
+                    match self.queue.front() {
+                        Some(order) => {
+                            //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
+                            if c_floor > order.floor{
+                                self.driver.set_motor_dir(MotorDir::Down).expect("Set MotorDir failed");
+                            }
+                            if c_floor < order.floor{
+                                self.driver.set_motor_dir(MotorDir::Up).expect("Set MotorDir failed");
+                            }
+                            if c_floor == order.floor{
+                                self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
+                                self.complete_order_signal(order);
+                                self.queue.pop_front();
+                                self.open_door();
+                            }
+                            match self.last_floor {
+                                Floor::At(p_floor) => {
+                                    //println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
+                                    if p_floor != c_floor {
                                         self.last_floor = self.driver.get_floor_signal().unwrap();
                                     }
                                 }
-                            }
-                            None => {
-                                self.driver.set_motor_dir(MotorDir::Stop).unwrap();
+                                Floor::Between => {
+                                    self.last_floor = self.driver.get_floor_signal().unwrap();
+                                }
                             }
                         }
-                    }
-                    //println!("[elev_controller] C: {:?}", c_floor);   
-                }
-                // TODO: Make elevator handle floor logic if it starts in between state
-                Floor::Between => {
-                    match self.queue.front() {
-                        Some(_) => {}
                         None => {
-                            self.driver.set_motor_dir(MotorDir::Down).unwrap();
+                            self.driver.set_motor_dir(MotorDir::Stop).unwrap();
                         }
                     }
                 }
+                //println!("[elev_controller] C: {:?}", c_floor);   
             }
-            match self.driver.get_stop_signal().unwrap(){
-                Signal::High => {
-                    self.driver.set_motor_dir(MotorDir::Stop).unwrap();
-                    self.stopped = true;
-                    self.driver.set_stop_light(Light::On).unwrap();
+            // TODO: Make elevator handle floor logic if it starts in between state
+            Floor::Between => {
+                match self.queue.front() {
+                    Some(_) => {}
+                    None => {
+                        self.driver.set_motor_dir(MotorDir::Down).unwrap();
+                    }
                 }
-                Signal::Low => {}
             }
+        }
+        match self.driver.get_stop_signal().unwrap(){
+            Signal::High => {
+                self.driver.set_motor_dir(MotorDir::Stop).unwrap();
+                self.stopped = true;
+                self.driver.set_stop_light(Light::On).unwrap();
+            }
+            Signal::Low => {}
         }
     }
 
