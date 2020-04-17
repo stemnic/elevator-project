@@ -59,8 +59,8 @@ impl Task {
 }
 
 impl TaskManager {
-    pub fn new() -> io::Result<Self> {
-        let elev_controller = elev_controller::ElevController::new().unwrap();
+    pub fn new(internal_sender: Sender<elev_controller::ElevatorButtonEvent>) -> io::Result<Self> {
+        let elev_controller = elev_controller::ElevController::new(internal_sender).unwrap();
         let task_vec = Vec::new();
         let tsk_mgn = TaskManager {elevator: elev_controller, task_list: task_vec};
         Ok(tsk_mgn)
