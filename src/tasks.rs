@@ -1,14 +1,18 @@
 use std::io;
 use elevator_driver::*;
 use network_rust::bcast::BcastReceiver;
+use network_rust::localip::get_localip;
 use std::sync::mpsc::*;
 use std::vec::Vec;
 use std::time::Duration;
 use std::time::SystemTime;
+use std::collections::VecDeque;
+use rand::prelude::*;
+use rand::Rng;
 
 use crate::elev_controller;
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 struct Task {
     order: elev_controller::Order,
     state: TaskStatemachineStates,
@@ -18,20 +22,27 @@ struct Task {
     ip_origin: std::net::IpAddr,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 struct CostFunctionDelay {
     current_time: SystemTime,
     waiting_time: Duration,
 }
 
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 enum TaskStatemachineStates {
     New,
     CostTake,
     Take,
+    CheckKeepCabState,
     CostComplete,
     CheckComplete,
     Complete,
+}
+
+#[derive(PartialEq, Debug)]
+enum Direction {
+    Up,
+    Down
 }
 
 pub struct TaskManager {
@@ -48,8 +59,8 @@ impl Task {
 }
 
 impl TaskManager {
-    pub fn new() -> io::Result<Self> {
-        let elev_controller = elev_controller::ElevController::new().unwrap();
+    pub fn new(internal_sender: Sender<elev_controller::ElevatorButtonEvent>) -> io::Result<Self> {
+        let elev_controller = elev_controller::ElevController::new(internal_sender).unwrap();
         let task_vec = Vec::new();
         let tsk_mgn = TaskManager {elevator: elev_controller, task_list: task_vec};
         Ok(tsk_mgn)
@@ -61,10 +72,8 @@ impl TaskManager {
         for task in &mut self.task_list {
             if task.order == new_task.order {
                 exist = true;
-                if task.complete {
-                    task.complete = false;
-                    task.taken = false;
-                    task.state = TaskStatemachineStates::New;
+                if new_task.order.order_type == elev_controller::ElevatorActions::Cabcall && task.ip_origin != new_task.ip_origin {
+                    exist = false;
                 }
             }
         }
@@ -73,17 +82,21 @@ impl TaskManager {
         }
     }
 
-    pub fn set_task_taken(&mut self, order: elev_controller::Order) {
+    pub fn set_task_taken(&mut self, order: elev_controller::Order, ip_origin: std::net::IpAddr) {
         for task in &mut self.task_list {
-            if task.order == order {
+            if task.order == order && order.order_type != elev_controller::ElevatorActions::Cabcall {
+                task.taken = true;
+            } else if task.order == order && order.order_type == elev_controller::ElevatorActions::Cabcall && task.ip_origin == ip_origin {
                 task.taken = true;
             }
         }
     }
 
-    pub fn set_task_complete(&mut self, order: elev_controller::Order) {
+    pub fn set_task_complete(&mut self, order: elev_controller::Order, ip_origin: std::net::IpAddr) {
         for task in &mut self.task_list {
-            if task.order == order {
+            if task.order == order && order.order_type != elev_controller::ElevatorActions::Cabcall {
+                task.complete = true;
+            } else if task.order == order && order.order_type == elev_controller::ElevatorActions::Cabcall && task.ip_origin == ip_origin {
                 task.complete = true;
             }
         }
@@ -92,24 +105,47 @@ impl TaskManager {
     pub fn run_task_state_machine(&mut self) {
         self.elevator.handle_order();
         self.elevator.check_buttons();
+        let mut task_delete_cleanup: std::vec::Vec<Task> = vec![];
         let tasks_copy = self.task_list.to_vec(); // This will make a copy of task_list before it iterates through it, the disadvantage here is that there is an delay in reactions in the cost function
         for task in &mut self.task_list {
             //println!("[tasks] {:?}", task);
             match task.state {
                 TaskStatemachineStates::New => {
-                    task.state = TaskStatemachineStates::CostTake;
-                    task.task_delay.current_time = SystemTime::now();
-                    task.task_delay.waiting_time = TaskManager::cost_function_delay_take(&task.order, &tasks_copy); 
+                    if task.ip_origin != get_localip().unwrap() && task.order.order_type == elev_controller::ElevatorActions::Cabcall {
+                        task.state = TaskStatemachineStates::CheckKeepCabState;
+                        task.task_delay.current_time = SystemTime::now();
+                    } else {
+                        task.state = TaskStatemachineStates::CostTake;
+                        task.task_delay.current_time = SystemTime::now();
+                        task.task_delay.waiting_time = TaskManager::cost_function_delay_take(&task, &tasks_copy, &self.elevator.get_order_list(), self.elevator.get_current_floor(), self.elevator.get_last_floor());
+                        self.elevator.set_button_light_for_order(&task.order.order_type, elev_driver::Floor::At(task.order.floor), elev_driver::Light::On);
+                        println!("[task] Take delay {:?} {:?}", task.order, task.task_delay.waiting_time);
+                    }
                 }
                 TaskStatemachineStates::CostTake => {
                     if task.taken {
+                        println!("[task]: Taken {:?}", task.order);
                         task.state = TaskStatemachineStates::CostComplete;
                         task.task_delay.current_time = SystemTime::now();
-                        task.task_delay.waiting_time = TaskManager::cost_function_delay_complete(&task.order, &tasks_copy); 
+                        task.task_delay.waiting_time = TaskManager::cost_function_delay_complete(&task, &tasks_copy, &self.elevator.get_order_list(), self.elevator.get_current_floor(), self.elevator.get_last_floor()); 
                     } else if task.task_delay.current_time.elapsed().unwrap() > task.task_delay.waiting_time {
                         task.state = TaskStatemachineStates::Take;
+                        println!("[task]: Taking {:?}", task.order);
                     }
     
+                }
+                TaskStatemachineStates::CheckKeepCabState => {
+                    if task.complete {
+                        task.state = TaskStatemachineStates::Complete;
+                    } else {
+                        // Spam order on UDP every 10th secound
+                        if task.task_delay.current_time.elapsed().unwrap() > Duration::from_secs(10) {
+                            println!("[task]: Spamming UDP {:?} {:?}", task.order, task.ip_origin);
+                            task.task_delay.current_time = SystemTime::now();
+                            let order_clone = task.order.clone();
+                            self.elevator.broadcast_order(order_clone, elev_controller::RequestType::Request, task.ip_origin);
+                        }
+                    }
                 }
                 TaskStatemachineStates::Take => {
                     let order_clone = task.order.clone();
@@ -120,6 +156,7 @@ impl TaskManager {
                     if task.complete {
                         task.state = TaskStatemachineStates::Complete;
                     } else if task.task_delay.current_time.elapsed().unwrap() > task.task_delay.waiting_time {
+                        println!("[task]: Taking uncomplete task {:?} {:?}", task.order, task.ip_origin);
                         task.state = TaskStatemachineStates::Take;
                     }
                 }
@@ -131,18 +168,109 @@ impl TaskManager {
                 }
                 TaskStatemachineStates::Complete => {
                     //println!("[tasks] Completed {:?}", task);
+                    if (task.order.order_type == elev_controller::ElevatorActions::Cabcall && task.ip_origin == get_localip().unwrap()) || task.order.order_type != elev_controller::ElevatorActions::Cabcall {
+                        println!("[task]: turning off {:?} {:?}", task.order, task.ip_origin);
+                        self.elevator.set_button_light_for_order(&task.order.order_type, elev_driver::Floor::At(task.order.floor), elev_driver::Light::Off);
+                    }
+                    task_delete_cleanup.push(task.clone());
                 }
+            }
+        }
+        for task in task_delete_cleanup {
+            let index = self.task_list.iter().position(|x| *x == task).unwrap();
+            self.task_list.remove(index);
+        }
+    }
+
+    fn cost_function_delay_take(task_order: &Task, task_queue: &Vec<Task>, elev_queue: &VecDeque<elev_controller::Order>, current_floor: isize, last_floor: isize) -> Duration {
+        // Cost function Wodo magic
+
+        // Number of floors, Distance between elevator and call, Direction of elevator
+
+        //println!("Current Task: {:?}\n task_queue: {:?}\n elev_queue {:?}", task_order, task_queue, elev_queue);
+        let mut rng = thread_rng();
+        let mut score = 0; // Higher is better
+        println!("[COST_DEBUG]: {:?}", task_order);
+        let mut number_of_others_tasks = 0;
+        let mut number_of_elevator_orders = 0;
+        for task in task_queue {
+            if task.state == TaskStatemachineStates::CostTake || task.state == TaskStatemachineStates::New {
+                number_of_others_tasks += 1;
+            }
+        }
+        for elev_orders in elev_queue {
+            number_of_elevator_orders += 1;
+        }
+        match elev_queue.front() {
+            Some(elev_current_doing) => {
+                //There are other orders in the elevator
+                let direction = TaskManager::direction_of_call(current_floor, last_floor);
+                match elev_current_doing.order_type {
+                    elev_controller::ElevatorActions::Cabcall => {
+                        score = 100;
+                    }
+                    elev_controller::ElevatorActions::LobbyDowncall => {
+                        if direction == Direction::Down && last_floor > task_order.order.floor as isize {
+                            // Elevator moving to order /w same direction
+                            score = (elev_driver::N_FLOORS as isize + 2) - (task_order.order.floor as isize - last_floor).abs();
+                        } else if direction == Direction::Up && last_floor < task_order.order.floor as isize {
+                            // Elevator moving to order /w opposit direction
+                            score = (elev_driver::N_FLOORS as isize + 1) - (task_order.order.floor as isize - last_floor).abs();
+                        } else {
+                            // Away from order
+                            score = 1;
+                        }
+                    }
+                    elev_controller::ElevatorActions::LobbyUpcall => {
+                        if direction == Direction::Up && last_floor < task_order.order.floor as isize {
+                            // Elevator moving to order /w same direction
+                            score = (elev_driver::N_FLOORS as isize + 2) - (task_order.order.floor as isize - last_floor).abs();
+                        } else if direction == Direction::Down && last_floor > task_order.order.floor as isize {
+                            // Elevator moving to order /w opposit direction
+                            score = (elev_driver::N_FLOORS as isize + 1) - (task_order.order.floor as isize - last_floor).abs();
+                        } else {
+                            // Away from order
+                            score = 1;
+                        }
+                    }
+                }
+                score = score - 20 * number_of_elevator_orders;
+                if score < 1 {
+                    score = 1;
+                }
+                println!("[COST_DEBUG]: score_some_queue {:?} other_tasks {:?} elev_orders {:?}", score, number_of_others_tasks, number_of_elevator_orders);
+                let delay = Duration::from_millis(5000/(score as u64));
+                println!("[COST_DEBUG]: delay {:?}", delay);
+                delay
+            }
+            None => {
+                //There is no other orders in the elevator
+                let mut delay = 2000;
+                let random_number = rand::thread_rng().gen::<u8>();
+                delay += (random_number as u64) * 5;
+                if task_order.ip_origin == get_localip().unwrap() {
+                    delay = 1
+                }
+                delay += number_of_others_tasks*500;
+                println!("[COST_DEBUG]: no_queue {:?}", delay);
+                Duration::from_millis(delay)
             }
         }
     }
 
-    fn cost_function_delay_take(task_order: &elev_controller::Order, task_queue: &Vec<Task>) -> Duration {
-        // Cost function Wodo magic
-        Duration::from_millis(10)
+    fn direction_of_call(going_to: isize, last_floor: isize) -> Direction { 
+        let mut dir = Direction::Up;
+        if going_to - last_floor > 0 {
+            dir = Direction::Up;
+        } else {
+            dir = Direction::Down;
+        }
+        dir
     }
-    fn cost_function_delay_complete(task_order: &elev_controller::Order, task_queue: &Vec<Task>) -> Duration {
+
+    fn cost_function_delay_complete(task_order: &Task, task_queue: &Vec<Task>, elev_queue: &VecDeque<elev_controller::Order>, current_floor: isize, last_floor: isize) -> Duration {
         // Cost function Wodo magic
-        Duration::from_secs(2)
+        Duration::from_secs(elev_driver::N_FLOORS as u64 * 3) + TaskManager::cost_function_delay_take(task_order, task_queue, elev_queue, current_floor, last_floor)
     }
 }
 

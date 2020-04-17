@@ -3,6 +3,9 @@ use network_rust::bcast::BcastTransmitter;
 use network_rust::localip::get_localip;
 use std::io;
 use serde::*;
+use std::thread;
+use std::thread::sleep;
+use std::sync::mpsc::Sender;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::collections::VecDeque;
@@ -13,6 +16,7 @@ pub struct ElevController {
     stopped: bool,
     door_state: DoorFloorState,
     last_floor: Floor,
+    internal_msg_sender: Sender<ElevatorButtonEvent>
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -67,93 +71,121 @@ fn init_elevator(elev_io: &ElevIo) {
 
 
 impl ElevController {
-    pub fn new() -> io::Result<Self> {
+    pub fn new(internal_message_sender: Sender<ElevatorButtonEvent>) -> io::Result<Self> {
         let que_obj: VecDeque<Order> = VecDeque::new();
-        let elev_driver = ElevIo::new().expect("Connecting to elevator failed");
+        let elev_driver = ElevIo::new(DEFAULT_IP_ADDRESS, DEFAULT_PORT).expect("Connecting to elevator failed");
         init_elevator(&elev_driver);
         elev_driver.set_all_light(Light::Off).unwrap();
         let sys_time = SystemTime::now();
         let init_door_state = DoorFloorState{timestamp_open: sys_time, complete: true} ;
         let current_floor = elev_driver.get_floor_signal().unwrap();
-        let controller = ElevController{queue: que_obj, driver:elev_driver, stopped: false, door_state:  init_door_state, last_floor: current_floor};
+        let controller = ElevController{queue: que_obj, driver:elev_driver, stopped: false, door_state:  init_door_state, last_floor: current_floor, internal_msg_sender: internal_message_sender};
         Ok(controller)
     }
     
     pub fn handle_order(&mut self) {
-        if !self.stopped {
-            println!("[elev_controller]: {:?}", self.queue);
-            match self.driver.get_floor_signal()
-                        .expect("Get FloorSignal failed") {
-                Floor::At(c_floor) => {
-                    if !self.door_state.complete {
-                        match self.door_state.timestamp_open.elapsed() {
-                            Ok(time) => {
-                                if time > Duration::from_secs(3) {                            
-                                    self.driver.set_door_light(Light::Off).unwrap();
-                                    self.door_state.complete = true;
-                                    println!("[elev_controller] Door closed");
-                                }
-                            }
-                            Err(e) => {
-                                println!("[elev_controller]: Systime error occured {:?}", e);
+        match self.driver.get_floor_signal()
+                    .expect("Get FloorSignal failed") {
+            Floor::At(c_floor) => {
+                if !self.door_state.complete {
+                    match self.door_state.timestamp_open.elapsed() {
+                        Ok(time) => {
+                            if time > Duration::from_secs(3) {                            
+                                self.driver.set_door_light(Light::Off).unwrap();
+                                self.door_state.complete = true;
+                                println!("[elev_controller] Door closed");
                             }
                         }
-                    } else {
-                        self.driver.set_floor_light(Floor::At(c_floor)).unwrap();
-                        match self.queue.front() {
-                            Some(order) => {
-                                //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
-                                if c_floor > order.floor{
-                                    self.driver.set_motor_dir(MotorDir::Down).expect("Set MotorDir failed");
-                                }
-                                if c_floor < order.floor{
-                                    self.driver.set_motor_dir(MotorDir::Up).expect("Set MotorDir failed");
-                                }
-                                if c_floor == order.floor{
-                                    self.driver.set_button_light(Button::Internal(Floor::At(c_floor)), Light::Off);
-                                    self.driver.set_button_light(Button::CallDown(Floor::At(c_floor)), Light::Off);
-                                    self.driver.set_button_light(Button::CallUp(Floor::At(c_floor)), Light::Off);
-                                    self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
-                                    ElevController::complete_order_signal(order);
-                                    self.queue.pop_front();
-                                    self.open_door();
-                                    match self.last_floor {
-                                        Floor::At(p_floor) => {
-                                            //println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
-                                            if p_floor != c_floor {
-                                                self.last_floor = self.driver.get_floor_signal().unwrap();
-                                            }
-                                        }
-                                        Floor::Between => {
-                                            self.last_floor = self.driver.get_floor_signal().unwrap();
-                                        }
-                                    }
-                                }
-                            }
-                            None => {
-                                self.driver.set_motor_dir(MotorDir::Stop).unwrap();
-                            }
+                        Err(e) => {
+                            println!("[elev_controller]: Systime error occured {:?}", e);
                         }
                     }
-                    //println!("[elev_controller] C: {:?}", c_floor);   
-                }
-                // TODO: Make elevator handle floor logic if it starts in between state
-                Floor::Between => {
+                } else {
+                    self.driver.set_floor_light(Floor::At(c_floor)).unwrap();
+                    let mut clear_orders_at_floor: std::vec::Vec<Order> = vec![]; //used to clear all orders at the floor the elevator arrives at
+                    let queue_clone=self.queue.clone();
                     match self.queue.front() {
-                        Some(_) => {}
-                        None => {
-                            self.driver.set_motor_dir(MotorDir::Down).unwrap();
+                        Some(order) => {
+                            //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
+                            if c_floor > order.floor{
+                                self.driver.set_motor_dir(MotorDir::Down).expect("Set MotorDir failed");
+                            }
+                            if c_floor < order.floor{
+                                self.driver.set_motor_dir(MotorDir::Up).expect("Set MotorDir failed");
+                            }
+                            if c_floor == order.floor{
+                                self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
+                                for task in queue_clone{
+                                    if task.floor ==c_floor{
+                                    clear_orders_at_floor.push(task.clone());
+                                    }
+                                }
+                                self.complete_order_signal(order);
+                                self.open_door();
+                            }
+                            match self.last_floor {
+                                Floor::At(p_floor) => {
+                                    //println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
+                                    if p_floor != c_floor {
+                                        self.last_floor = self.driver.get_floor_signal().unwrap();
+                                    }
+                                }
+                                Floor::Between => {
+                                    self.last_floor = self.driver.get_floor_signal().unwrap();
+                                }
+                            }
                         }
+                        None => {
+                            self.driver.set_motor_dir(MotorDir::Stop).unwrap();
+                        }
+                    }
+                    for task in clear_orders_at_floor {
+                        let index = self.queue.iter().position(|x| *x == task).unwrap();
+                        self.queue.remove(index);
+                        self.complete_order_signal(&task);
+                    }
+                }
+                //println!("[elev_controller] C: {:?}", c_floor);   
+            }
+            // TODO: Make elevator handle floor logic if it starts in between state
+            Floor::Between => {
+                match self.queue.front() {
+                    Some(_) => {}
+                    None => {
+                        self.driver.set_motor_dir(MotorDir::Down).unwrap();
                     }
                 }
             }
-            match self.driver.get_stop_signal().unwrap(){
-                Signal::High => {
-                    self.driver.set_motor_dir(MotorDir::Stop).unwrap();
-                    self.stopped = true;
-                    self.driver.set_stop_light(Light::On).unwrap();
-                }
-                Signal::Low => {}
+        }
+        match self.driver.get_stop_signal().unwrap(){
+            Signal::High => {
+                self.driver.set_motor_dir(MotorDir::Stop).unwrap();
+                self.stopped = true;
+                self.driver.set_stop_light(Light::On).unwrap();
+            }
+            Signal::Low => {}
+        }
+    }
+
+    pub fn get_current_floor(&self) -> isize {
+        
+        match self.driver.get_floor_signal().unwrap() {
+            Floor::At(num) => {
+                num as isize
+            }
+            Floor::Between => {
+                -1
+            }
+        }
+    }
+
+    pub fn get_last_floor(&self) -> isize {
+        match self.last_floor {
+            Floor::At(num) => {
+                num as isize
+            }
+            Floor::Between => {
+                -1
             }
         }
     }
@@ -163,8 +195,8 @@ impl ElevController {
         for floor in 0..N_FLOORS {
             match self.driver.get_button_signal(Button::Internal(Floor::At(floor))).unwrap() {
                 Signal::High => {
-                    let data_block = ElevatorButtonEvent{request: RequestType::Request, action: ElevatorActions::Cabcall, floor: floor, origin:get_localip().unwrap() };
-                    broadcast.transmit(&data_block).unwrap();
+                    let order = Order{floor: floor, order_type: ElevatorActions::Cabcall};
+                    self.broadcast_order(order, RequestType::Request, get_localip().unwrap());
                 }
                 Signal::Low => {
 
@@ -173,8 +205,8 @@ impl ElevController {
             if floor != (N_FLOORS-1) {
                 match self.driver.get_button_signal(Button::CallUp(Floor::At(floor))).expect("Unable to retrive hall up") {
                     Signal::High => {
-                        let data_block = ElevatorButtonEvent{request: RequestType::Request, action: ElevatorActions::LobbyUpcall, floor: floor, origin:get_localip().unwrap() };
-                        broadcast.transmit(&data_block).unwrap();
+                        let order = Order{floor: floor, order_type: ElevatorActions::LobbyUpcall};
+                        self.broadcast_order(order, RequestType::Request, get_localip().unwrap());
                     }
                     Signal::Low => {
     
@@ -184,8 +216,8 @@ impl ElevController {
             if floor != 0 {
                 match self.driver.get_button_signal(Button::CallDown(Floor::At(floor))).expect("Unable to retrive hall down") {
                     Signal::High => {
-                        let data_block = ElevatorButtonEvent{request: RequestType::Request, action: ElevatorActions::LobbyDowncall, floor: floor, origin:get_localip().unwrap() };
-                        broadcast.transmit(&data_block).unwrap();
+                        let order = Order{floor: floor, order_type: ElevatorActions::LobbyDowncall};
+                        self.broadcast_order(order, RequestType::Request, get_localip().unwrap());
                     }
                     Signal::Low => {
     
@@ -198,37 +230,52 @@ impl ElevController {
 
     fn open_door(&mut self) {
         self.driver.set_door_light(Light::On).unwrap();
-        println!("[elev_controller] Door open");
+        println!("[elev_controller]: Door open");
         self.door_state.complete = false;
         self.door_state.timestamp_open = SystemTime::now();
 
     }
 
-    fn complete_order_signal(order: &Order) {
+    fn complete_order_signal(&self, order: &Order) {
         let order_copy = order.clone();
-        let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
-        let data_block = ElevatorButtonEvent{request: RequestType::Complete, action: order_copy.order_type, floor: order_copy.floor, origin:get_localip().unwrap() };
-        broadcast.transmit(&data_block).unwrap();
+        self.broadcast_order(order_copy, RequestType::Complete, get_localip().unwrap());
     }
 
     pub fn add_order(&mut self, order: Order) {
         let order_copy = order.clone();
         self.queue.push_back(order);
-        let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
-        let data_block = ElevatorButtonEvent{request: RequestType::Taken, action: order_copy.order_type, floor: order_copy.floor, origin:get_localip().unwrap() };
-        broadcast.transmit(&data_block).unwrap();
+        self.broadcast_order(order_copy, RequestType::Taken, get_localip().unwrap());
     }
 
-    pub fn set_button_light_for_order(&mut self, action: ElevatorActions, floor: Floor) {
+    pub fn broadcast_order(&self, order: Order, request: RequestType, origin: std::net::IpAddr) {
+        let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
+        let data_block_internal = ElevatorButtonEvent{request: request, action: order.order_type, floor: order.floor, origin:origin };
+        let data_block_network = data_block_internal.clone();
+        self.internal_msg_sender.send(data_block_internal).unwrap();
+        thread::spawn(move || {
+            for _ in 0..10 {
+                broadcast.transmit(&data_block_network).unwrap();
+                sleep(Duration::from_millis(10));
+            }
+        });
+        
+    }
+
+    pub fn get_order_list(&self) -> VecDeque<Order> {
+        let order_queue = self.queue.clone();
+        order_queue
+    }
+
+    pub fn set_button_light_for_order(&mut self, action: &ElevatorActions, floor: Floor, light: Light) {
         match action {
             ElevatorActions::Cabcall =>{
-                self.driver.set_button_light(Button::Internal(floor), Light::On);
+                self.driver.set_button_light(Button::Internal(floor), light).unwrap();
             }
             ElevatorActions::LobbyUpcall =>{
-                self.driver.set_button_light(Button::CallUp(floor), Light::On);
+                self.driver.set_button_light(Button::CallUp(floor), light).unwrap();
             }
             ElevatorActions::LobbyDowncall =>{
-                self.driver.set_button_light(Button::CallDown(floor), Light::On);
+                self.driver.set_button_light(Button::CallDown(floor), light).unwrap();
             }
         }
     }
