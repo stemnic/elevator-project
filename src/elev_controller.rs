@@ -106,7 +106,6 @@ impl ElevController {
                     let mut clear_orders_at_floor: std::vec::Vec<Order> = vec![]; //used to clear all orders at the floor the elevator arrives at
                     let queue_clone=self.queue.clone();
                     let queue_clone1=self.queue.clone();
-                    let mut shady_shit = true;
                     match self.queue.front() {
                         Some(order) => {
                             //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
@@ -126,7 +125,22 @@ impl ElevController {
                                 }
                                 self.complete_order_signal(order);
                                 self.open_door();
-                                shady_shit = false;
+                            } else {
+                                for task in queue_clone1{
+                                    match task.order_type{
+                                        ElevatorActions::Cabcall => {
+                                            if task.floor == c_floor{
+                                                self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
+                                                let index = self.queue.iter().position(|x| *x == task).unwrap();
+                                                self.queue.remove(index);
+                                                self.complete_order_signal(&task);
+                                                self.open_door();
+                                                //println!("[Elev_controller]: Stopped here!")
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
                             }
                             match self.last_floor {
                                 Floor::At(p_floor) => {
@@ -142,23 +156,6 @@ impl ElevController {
                         }
                         None => {
                             self.driver.set_motor_dir(MotorDir::Stop).unwrap();
-                        }
-                    }
-                    if shady_shit{
-                        for task in queue_clone1{
-                            match task.order_type{
-                                ElevatorActions::Cabcall => {
-                                    if task.floor == c_floor{
-                                        self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
-                                        let index = self.queue.iter().position(|x| *x == task).unwrap();
-                                        self.queue.remove(index);
-                                        self.complete_order_signal(&task);
-                                        self.open_door();
-                                        println!("[Elev_controller]: Stopped here!")
-                                    }
-                                }
-                                _ => println!("")
-                            }
                         }
                     }
                     for task in clear_orders_at_floor {
@@ -270,13 +267,14 @@ impl ElevController {
 
     pub fn broadcast_order(&self, order: Order, request: RequestType, origin: u32) {
         let broadcast = BcastTransmitter::new(self.udp_broadcast_port).unwrap();
-        let data_block_internal = ElevatorButtonEvent{request: request, action: order.order_type, floor: order.floor, origin:origin };
+        let data_block_internal = ElevatorButtonEvent{request: request, order: order, origin:origin };
+        println!("[elev_controller] Broadcasting {:?}", data_block_internal);
         let data_block_network = data_block_internal.clone();
         self.internal_msg_sender.send(data_block_internal).unwrap();
         thread::spawn(move || {
             for _ in 0..10 {
                 broadcast.transmit(&data_block_network).unwrap();
-                sleep(Duration::from_millis(10));
+                sleep(Duration::from_millis(1));
             }
         });
         
