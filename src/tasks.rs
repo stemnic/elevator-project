@@ -110,7 +110,7 @@ impl TaskManager {
         let mut task_delete_cleanup: std::vec::Vec<Task> = vec![];
         let tasks_copy = self.task_list.to_vec(); // This will make a copy of task_list before it iterates through it, the disadvantage here is that there is an delay in reactions in the cost function
         for task in &mut self.task_list {
-            println!("[tasks] {:?}", task);
+            //println!("[tasks] {:?}", task);
             match task.state {
                 TaskStatemachineStates::New => {
                     if task.origin_id != self.elevator_id && task.order.order_type == elev_controller::ElevatorActions::Cabcall {
@@ -142,10 +142,10 @@ impl TaskManager {
                     } else {
                         // Spam order on UDP every 10th secound
                         if task.task_delay.current_time.elapsed().unwrap() > Duration::from_secs(10) {
-                            //println!("[task]: Spamming UDP {:?} {:?}", task.order, task.origin_id);
+                            println!("[task]: Spamming UDP {:?} {:?}", task.order, task.origin_id);
                             task.task_delay.current_time = SystemTime::now();
                             let order_clone = task.order.clone();
-                            // self.elevator.broadcast_order(order_clone, elev_controller::RequestType::Request, task.origin_id);
+                            self.elevator.broadcast_order(order_clone, elev_controller::RequestType::Request, task.origin_id);
                         }
                     }
                 }
@@ -179,10 +179,10 @@ impl TaskManager {
             }
         }
         for task in task_delete_cleanup {
-            //if task.complete_time.elapsed().unwrap() > Duration::from_secs(5) || task.order.order_type != elev_controller::ElevatorActions::Cabcall {
+            if task.complete_time.elapsed().unwrap() > Duration::from_secs(5) || task.order.order_type != elev_controller::ElevatorActions::Cabcall {
                 let index = self.task_list.iter().position(|x| *x == task).unwrap();
                 self.task_list.remove(index);
-            //}  
+            }  
         }
     }
 

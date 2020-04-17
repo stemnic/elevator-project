@@ -3,7 +3,7 @@ use std::thread;
 use std::sync::mpsc::*;
 use std::env;
 use regex::Regex;
-
+use std::time::SystemTime;
 
 mod tasks;
 mod elev_controller;
@@ -46,8 +46,8 @@ fn main() {
             elevator_port = (&args[4]).parse::<u16>().unwrap();
         }
         _ => {
-            //println!("Invalid number of arguments!");
-            //println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
+            println!("Invalid number of arguments!");
+            println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
             std::process::exit(0);
         }
     }
@@ -66,6 +66,7 @@ fn main() {
     loop {
         match network_reciver.try_recv() {
             Ok(data) => {
+                println!("{:#?}: Reciving {:?}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(), data);
                 handle_network_message(&mut taskmanager, data);
             }
             Err(_) => {}

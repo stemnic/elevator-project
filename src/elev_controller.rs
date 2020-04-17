@@ -267,13 +267,13 @@ impl ElevController {
     pub fn broadcast_order(&self, order: Order, request: RequestType, origin: u32) {
         let broadcast = BcastTransmitter::new(self.udp_broadcast_port).unwrap();
         let data_block_internal = ElevatorButtonEvent{request: request, order: order, origin:origin };
-        //println!("[elev_controller] Broadcasting {:?}", data_block_internal);
+        println!("{:?}: Broadcasting {:?}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap() , data_block_internal);
         let data_block_network = data_block_internal.clone();
         self.internal_msg_sender.send(data_block_internal).unwrap();
         thread::spawn(move || {
-            for _ in 0..10 {
+            for _ in 0..3 {
                 broadcast.transmit(&data_block_network).unwrap();
-                sleep(Duration::from_millis(1));
+                sleep(Duration::from_millis(50));
             }
         });
         
