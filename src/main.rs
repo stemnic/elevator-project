@@ -83,13 +83,13 @@ fn main() {
 fn handle_network_message(task_mgr: &mut tasks::TaskManager, msg: elev_controller::ElevatorButtonEvent) {
     match msg.request {
         elev_controller::RequestType::Request => {
-            task_mgr.add_new_task(elev_controller::Order {order_type: msg.action, floor: msg.floor}, msg.origin);
+            task_mgr.add_new_task(msg.order, msg.origin);
         }
         elev_controller::RequestType::Taken => {
-            task_mgr.set_task_taken(elev_controller::Order {order_type: msg.action, floor: msg.floor}, msg.origin);
+            task_mgr.set_task_taken(msg.order, msg.origin);
         }
         elev_controller::RequestType::Complete => {
-            task_mgr.set_task_complete(elev_controller::Order {order_type: msg.action, floor: msg.floor}, msg.origin);
+            task_mgr.set_task_complete(msg.order, msg.origin);
         }
     }
 }

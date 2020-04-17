@@ -23,8 +23,7 @@ pub struct ElevController {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ElevatorButtonEvent {
     pub request: RequestType,
-    pub action: ElevatorActions,
-    pub floor: u8,
+    pub order: Order,
     pub origin: u32
 }
 
@@ -48,7 +47,7 @@ pub enum RequestType {
 }
 
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Order {
     pub floor: u8,
     pub order_type: ElevatorActions,
