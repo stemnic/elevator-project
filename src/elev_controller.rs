@@ -105,6 +105,8 @@ impl ElevController {
                     self.driver.set_floor_light(Floor::At(c_floor)).unwrap();
                     let mut clear_orders_at_floor: std::vec::Vec<Order> = vec![]; //used to clear all orders at the floor the elevator arrives at
                     let queue_clone=self.queue.clone();
+                    let queue_clone1=self.queue.clone();
+                    let mut shady_shit = true;
                     match self.queue.front() {
                         Some(order) => {
                             //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
