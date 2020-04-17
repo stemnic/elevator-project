@@ -233,26 +233,42 @@ impl TaskManager {
                         }
                     }
                 }
-                score = score - 20 * number_of_elevator_orders;
-                if score < 1 {
-                    score = 1;
-                }
+                let ip_score=elev_id;
+                let delay =2000+1000*score+2500 * number_of_elevator_orders+150*ip_score as isize;
+
                 println!("[COST_DEBUG]: score_some_queue {:?} other_tasks {:?} elev_orders {:?}", score, number_of_others_tasks, number_of_elevator_orders);
-                let delay = Duration::from_millis(5000/(score as u64));
                 println!("[COST_DEBUG]: delay {:?}", delay);
-                delay
+
+                Duration::from_millis(delay as u64)
             }
             None => {
-                //There is no other orders in the elevator
-                let mut delay = 2000;
-                let random_number = rand::thread_rng().gen::<u8>();
-                delay += (random_number as u64) * 5;
-                if task_order.origin_id == elev_id {
-                    delay = 1
-                }
-                delay += number_of_others_tasks*500;
-                println!("[COST_DEBUG]: no_queue {:?}", delay);
-                Duration::from_millis(delay)
+
+                   //There is no other orders in the elevator
+                    let mut delay =1000;
+                    let ip_score= elev_id;
+                    let mut distance_score=0;
+                
+                
+                    //let random_number :u8 = rand::thread_rng().gen_range(1,10);
+                    //delay += (random_number as u64) * 10;
+                
+                    let current_order =&task_order.order;
+    
+                    if current_order.order_type==elev_controller::ElevatorActions::Cabcall{
+                        delay=20;
+                    }
+    
+                    else{
+                        distance_score =(current_floor-current_order.floor as isize).abs();
+                        delay=delay+500*distance_score as u64 +150*ip_score as u64;
+    
+                    }
+                    println!("DELAY :   {:?}",delay);
+                    println!("TASK Q: {:?}",task_queue[0].order.order_type);
+                    println!("Elev Q: {:?}",elev_queue.front());
+                    //delay += number_of_others_tasks*500;
+                    //println!("[COST_DEBUG]: no_queue {:?}", delay);
+                    Duration::from_millis(delay)
             }
         }
     }
