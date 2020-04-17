@@ -3,7 +3,7 @@ use std::thread;
 use std::sync::mpsc::*;
 use std::env;
 use regex::Regex;
-
+use std::time::SystemTime;
 
 mod tasks;
 mod elev_controller;
@@ -25,7 +25,7 @@ fn main() {
         2 => {
             let cmd = &args[1];
             if cmd.contains("--help") {
-                println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
+                //println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
                 std::process::exit(0);
             }
             id = cmd.parse::<u32>().unwrap();
@@ -66,6 +66,7 @@ fn main() {
     loop {
         match network_reciver.try_recv() {
             Ok(data) => {
+                println!("{:#?}: Reciving {:?}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(), data);
                 handle_network_message(&mut taskmanager, data);
             }
             Err(_) => {}
