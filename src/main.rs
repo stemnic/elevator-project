@@ -25,7 +25,7 @@ fn main() {
         2 => {
             let cmd = &args[1];
             if cmd.contains("--help") {
-                println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
+                //println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
                 std::process::exit(0);
             }
             id = cmd.parse::<u32>().unwrap();
@@ -46,8 +46,8 @@ fn main() {
             elevator_port = (&args[4]).parse::<u16>().unwrap();
         }
         _ => {
-            println!("Invalid number of arguments!");
-            println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
+            //println!("Invalid number of arguments!");
+            //println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
             std::process::exit(0);
         }
     }
