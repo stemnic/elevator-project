@@ -11,3 +11,5 @@ elevator-driver = {git = "https://github.com/stemnic/elevator-driver.git"}
 network-rust = { git = "https://github.com/stemnic/network-rust.git" }
 serde = { version = "1.0.104", features = ["derive"] }
 rand = "0.7.3"
+regex = "1"
+
