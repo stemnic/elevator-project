@@ -117,12 +117,14 @@ impl ElevController {
                             if c_floor == order.floor{
                                 self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
                                 for task in queue_clone{
-                                    if task.floor ==c_floor{
-                                    clear_orders_at_floor.push(task.clone());
+
+                                    if task.floor == c_floor{
+                                        clear_orders_at_floor.push(task.clone());
                                     }
                                 }
                                 self.complete_order_signal(order);
                                 self.open_door();
+                                shady_shit = false;
                             }
                             match self.last_floor {
                                 Floor::At(p_floor) => {
@@ -138,6 +140,23 @@ impl ElevController {
                         }
                         None => {
                             self.driver.set_motor_dir(MotorDir::Stop).unwrap();
+                        }
+                    }
+                    if shady_shit{
+                        for task in queue_clone1{
+                            match task.order_type{
+                                ElevatorActions::Cabcall => {
+                                    if task.floor == c_floor{
+                                        self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
+                                        let index = self.queue.iter().position(|x| *x == task).unwrap();
+                                        self.queue.remove(index);
+                                        self.complete_order_signal(&task);
+                                        self.open_door();
+                                        println!("[Elev_controller]: Stopped here!")
+                                    }
+                                }
+                                _ => println!("")
+                            }
                         }
                     }
                     for task in clear_orders_at_floor {

@@ -51,7 +51,7 @@ fn main() {
             std::process::exit(0);
         }
     }
-
+  
     let (network_sender, network_reciver) = channel::<elev_controller::ElevatorButtonEvent>();
     let (internal_sender, internal_reciver) = channel::<elev_controller::ElevatorButtonEvent>();
     thread::spawn(move || {
