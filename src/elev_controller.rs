@@ -16,7 +16,9 @@ pub struct ElevController {
     stopped: bool,
     door_state: DoorFloorState,
     last_floor: Floor,
-    internal_msg_sender: Sender<ElevatorButtonEvent>
+    internal_msg_sender: Sender<ElevatorButtonEvent>,
+    elevator_id: u32,
+    udp_broadcast_port: u16,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -24,7 +26,7 @@ pub struct ElevatorButtonEvent {
     pub request: RequestType,
     pub action: ElevatorActions,
     pub floor: u8,
-    pub origin: std::net::IpAddr
+    pub origin: u32
 }
 
 struct DoorFloorState {
@@ -71,15 +73,15 @@ fn init_elevator(elev_io: &ElevIo) {
 
 
 impl ElevController {
-    pub fn new(internal_message_sender: Sender<ElevatorButtonEvent>) -> io::Result<Self> {
+    pub fn new(internal_message_sender: Sender<ElevatorButtonEvent>, elevator_id: u32, udp_broadcast_port: u16 , elevator_ip: &str, elevator_port: u16) -> io::Result<Self> {
         let que_obj: VecDeque<Order> = VecDeque::new();
-        let elev_driver = ElevIo::new(DEFAULT_IP_ADDRESS, DEFAULT_PORT).expect("Connecting to elevator failed");
+        let elev_driver = ElevIo::new(elevator_ip, elevator_port).expect("Connecting to elevator failed");
         init_elevator(&elev_driver);
         elev_driver.set_all_light(Light::Off).unwrap();
         let sys_time = SystemTime::now();
         let init_door_state = DoorFloorState{timestamp_open: sys_time, complete: true} ;
         let current_floor = elev_driver.get_floor_signal().unwrap();
-        let controller = ElevController{queue: que_obj, driver:elev_driver, stopped: false, door_state:  init_door_state, last_floor: current_floor, internal_msg_sender: internal_message_sender};
+        let controller = ElevController{queue: que_obj, driver:elev_driver, stopped: false, door_state:  init_door_state, last_floor: current_floor, internal_msg_sender: internal_message_sender, elevator_id: elevator_id, udp_broadcast_port: udp_broadcast_port};
         Ok(controller)
     }
     
@@ -191,12 +193,12 @@ impl ElevController {
     }
 
     pub fn check_buttons(&mut self) {
-        let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
+        let broadcast = BcastTransmitter::new(self.udp_broadcast_port).unwrap();
         for floor in 0..N_FLOORS {
             match self.driver.get_button_signal(Button::Internal(Floor::At(floor))).unwrap() {
                 Signal::High => {
                     let order = Order{floor: floor, order_type: ElevatorActions::Cabcall};
-                    self.broadcast_order(order, RequestType::Request, get_localip().unwrap());
+                    self.broadcast_order(order, RequestType::Request, self.elevator_id);
                 }
                 Signal::Low => {
 
@@ -206,7 +208,7 @@ impl ElevController {
                 match self.driver.get_button_signal(Button::CallUp(Floor::At(floor))).expect("Unable to retrive hall up") {
                     Signal::High => {
                         let order = Order{floor: floor, order_type: ElevatorActions::LobbyUpcall};
-                        self.broadcast_order(order, RequestType::Request, get_localip().unwrap());
+                        self.broadcast_order(order, RequestType::Request, self.elevator_id);
                     }
                     Signal::Low => {
     
@@ -217,7 +219,7 @@ impl ElevController {
                 match self.driver.get_button_signal(Button::CallDown(Floor::At(floor))).expect("Unable to retrive hall down") {
                     Signal::High => {
                         let order = Order{floor: floor, order_type: ElevatorActions::LobbyDowncall};
-                        self.broadcast_order(order, RequestType::Request, get_localip().unwrap());
+                        self.broadcast_order(order, RequestType::Request, self.elevator_id);
                     }
                     Signal::Low => {
     
@@ -238,17 +240,17 @@ impl ElevController {
 
     fn complete_order_signal(&self, order: &Order) {
         let order_copy = order.clone();
-        self.broadcast_order(order_copy, RequestType::Complete, get_localip().unwrap());
+        self.broadcast_order(order_copy, RequestType::Complete, self.elevator_id);
     }
 
     pub fn add_order(&mut self, order: Order) {
         let order_copy = order.clone();
         self.queue.push_back(order);
-        self.broadcast_order(order_copy, RequestType::Taken, get_localip().unwrap());
+        self.broadcast_order(order_copy, RequestType::Taken, self.elevator_id);
     }
 
-    pub fn broadcast_order(&self, order: Order, request: RequestType, origin: std::net::IpAddr) {
-        let broadcast = BcastTransmitter::new(BCAST_PORT).unwrap();
+    pub fn broadcast_order(&self, order: Order, request: RequestType, origin: u32) {
+        let broadcast = BcastTransmitter::new(self.udp_broadcast_port).unwrap();
         let data_block_internal = ElevatorButtonEvent{request: request, action: order.order_type, floor: order.floor, origin:origin };
         let data_block_network = data_block_internal.clone();
         self.internal_msg_sender.send(data_block_internal).unwrap();

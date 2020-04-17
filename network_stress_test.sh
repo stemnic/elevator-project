@@ -52,12 +52,12 @@ while true; do
       sudo iptables -A INPUT -p tcp --dport 15657 -j ACCEPT; sudo iptables -A INPUT -p tcp --sport 15657 -j ACCEPT; \
       sudo iptables -A INPUT -j DROP; \
       echo "Done")
-      display_result "Started blocking udp"
+      display_result "Started blocking udp 26665"
       ;;
     2 )
       result=$(sudo iptables -A INPUT -p udp --dport 26665 -m statistic --mode random --probability 0.2 -j DROP; \
       sudo iptables -A INPUT -p udp --sport 26665 -m statistic --mode random --probability 0.2 -j DROP)
-      display_result "Starting 20% udp package dropping"
+      display_result "Starting 20% udp package dropping 26665"
       ;;
     3 )
       result=$(sudo iptables -F)
