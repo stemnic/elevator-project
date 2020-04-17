@@ -97,7 +97,7 @@ impl ElevController {
                             }
                         }
                         Err(e) => {
-                            //println!("[elev_controller]: Systime error occured {:?}", e);
+                            println!("[elev_controller]: Systime error occured {:?}", e);
                         }
                     }
                 } else {
