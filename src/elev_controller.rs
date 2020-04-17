@@ -1,6 +1,5 @@
 use elevator_driver::elev_driver::*;
 use network_rust::bcast::BcastTransmitter;
-use network_rust::localip::get_localip;
 use std::io;
 use serde::*;
 use std::thread;
@@ -193,7 +192,6 @@ impl ElevController {
     }
 
     pub fn check_buttons(&mut self) {
-        let broadcast = BcastTransmitter::new(self.udp_broadcast_port).unwrap();
         for floor in 0..N_FLOORS {
             match self.driver.get_button_signal(Button::Internal(Floor::At(floor))).unwrap() {
                 Signal::High => {

@@ -1,7 +1,5 @@
 use std::io;
 use elevator_driver::*;
-use network_rust::bcast::BcastReceiver;
-use network_rust::localip::get_localip;
 use std::sync::mpsc::*;
 use std::vec::Vec;
 use std::time::Duration;
