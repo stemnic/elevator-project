@@ -105,7 +105,6 @@ impl ElevController {
                     self.driver.set_floor_light(Floor::At(c_floor)).unwrap();
                     let mut clear_orders_at_floor: std::vec::Vec<Order> = vec![]; //used to clear all orders at the floor the elevator arrives at
                     let queue_clone=self.queue.clone();
-                    let queue_clone1=self.queue.clone();
                     match self.queue.front() {
                         Some(order) => {
                             //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
@@ -118,7 +117,6 @@ impl ElevController {
                             if c_floor == order.floor{
                                 self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
                                 for task in queue_clone{
-
                                     if task.floor == c_floor{
                                         clear_orders_at_floor.push(task.clone());
                                     }
@@ -126,12 +124,22 @@ impl ElevController {
                                 self.complete_order_signal(order);
                                 self.open_door();
                             } else {
-                                for task in queue_clone1{
+                                for task in queue_clone.clone(){
                                     match task.order_type{
                                         ElevatorActions::Cabcall => {
                                             if task.floor == c_floor{
                                                 self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
                                                 let index = self.queue.iter().position(|x| *x == task).unwrap();
+                                                for task in queue_clone.clone(){
+                                                    match task.order_type{
+                                                        ElevatorActions::Cabcall =>{}
+                                                        _ => {
+                                                            if task.floor == c_floor{
+                                                                clear_orders_at_floor.push(task.clone());
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                                 self.queue.remove(index);
                                                 self.complete_order_signal(&task);
                                                 self.open_door();

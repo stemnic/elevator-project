@@ -9,6 +9,7 @@ mod tasks;
 mod elev_controller;
 
 fn main() {
+    println!("Starting Elevator server");
     let args: Vec<String> = env::args().collect();
     let re = Regex::new(r"((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)))+$").unwrap();
     let ip_addr = network_rust::localip::get_localip().unwrap().to_string();
