@@ -1,3 +1,4 @@
+![Rust](https://github.com/stemnic/elevator-project/workflows/Rust/badge.svg)
 # Elevator project for TTK4145
 ## Docker Setup
 To make it easier to test with multiple elevators on the same machine a Docker setup has been made where the number of elevators can be dynamically set.

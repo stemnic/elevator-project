@@ -16,6 +16,7 @@ struct Task {
     state: TaskStatemachineStates,
     taken: bool,
     complete: bool,
+    complete_time: SystemTime,
     task_delay: CostFunctionDelay,
     origin_id: u32,
 }
@@ -52,7 +53,7 @@ pub struct TaskManager {
 impl Task {
     pub fn new(order: elev_controller::Order, origin_id: u32) -> io::Result<Self> {
         let default_delay = CostFunctionDelay {current_time: SystemTime::now(), waiting_time: Duration::from_secs(1)};
-        let task = Task {order: order, state: TaskStatemachineStates::New, taken: false, complete: false, task_delay: default_delay, origin_id: origin_id};
+        let task = Task {order: order, state: TaskStatemachineStates::New, taken: false, complete: false, complete_time: SystemTime::now(), task_delay: default_delay, origin_id: origin_id};
         Ok(task)
     }
 }
@@ -94,8 +95,10 @@ impl TaskManager {
     pub fn set_task_complete(&mut self, order: elev_controller::Order, origin_id: u32) {
         for task in &mut self.task_list {
             if task.order == order && order.order_type != elev_controller::ElevatorActions::Cabcall {
+                task.complete_time = SystemTime::now();
                 task.complete = true;
             } else if task.order == order && order.order_type == elev_controller::ElevatorActions::Cabcall && task.origin_id == origin_id {
+                task.complete_time = SystemTime::now();
                 task.complete = true;
             }
         }
@@ -118,18 +121,18 @@ impl TaskManager {
                         task.task_delay.current_time = SystemTime::now();
                         task.task_delay.waiting_time = TaskManager::cost_function_delay_take(&task, &tasks_copy, &self.elevator.get_order_list(), self.elevator.get_current_floor(), self.elevator.get_last_floor(), self.elevator_id);
                         self.elevator.set_button_light_for_order(&task.order.order_type, elev_driver::Floor::At(task.order.floor), elev_driver::Light::On);
-                        println!("[task] Take delay {:?} {:?}", task.order, task.task_delay.waiting_time);
+                        //println!("[task] Take delay {:?} {:?}", task.order, task.task_delay.waiting_time);
                     }
                 }
                 TaskStatemachineStates::CostTake => {
                     if task.taken {
-                        println!("[task]: Taken {:?}", task.order);
+                        //println!("[task]: Taken {:?}", task.order);
                         task.state = TaskStatemachineStates::CostComplete;
                         task.task_delay.current_time = SystemTime::now();
                         task.task_delay.waiting_time = TaskManager::cost_function_delay_complete(&task, &tasks_copy, &self.elevator.get_order_list(), self.elevator.get_current_floor(), self.elevator.get_last_floor(), self.elevator_id); 
                     } else if task.task_delay.current_time.elapsed().unwrap() > task.task_delay.waiting_time {
                         task.state = TaskStatemachineStates::Take;
-                        println!("[task]: Taking {:?}", task.order);
+                        //println!("[task]: Taking {:?}", task.order);
                     }
     
                 }
@@ -155,20 +158,23 @@ impl TaskManager {
                     if task.complete {
                         task.state = TaskStatemachineStates::Complete;
                     } else if task.task_delay.current_time.elapsed().unwrap() > task.task_delay.waiting_time {
-                        println!("[task]: Taking uncomplete task {:?} {:?}", task.order, task.origin_id);
+                        //println!("[task]: Taking uncomplete task {:?} {:?}", task.order, task.origin_id);
                         task.state = TaskStatemachineStates::Take;
                     }
                 }
                 TaskStatemachineStates::CheckComplete => {
                     if task.complete {
                         task.state = TaskStatemachineStates::Complete;
+                        if task.order.order_type != elev_controller::ElevatorActions::Cabcall {
+                            self.elevator.delete_order(&task.order);
+                        } 
                     }
     
                 }
                 TaskStatemachineStates::Complete => {
-                    //println!("[tasks] Completed {:?}", task);
+                    ////println!("[tasks] Completed {:?}", task);
                     if (task.order.order_type == elev_controller::ElevatorActions::Cabcall && task.origin_id == self.elevator_id) || task.order.order_type != elev_controller::ElevatorActions::Cabcall {
-                        println!("[task]: turning off {:?} {:?}", task.order, task.origin_id);
+                        //println!("[task]: turning off {:?} {:?}", task.order, task.origin_id);
                         self.elevator.set_button_light_for_order(&task.order.order_type, elev_driver::Floor::At(task.order.floor), elev_driver::Light::Off);
                     }
                     task_delete_cleanup.push(task.clone());
@@ -176,8 +182,10 @@ impl TaskManager {
             }
         }
         for task in task_delete_cleanup {
-            let index = self.task_list.iter().position(|x| *x == task).unwrap();
-            self.task_list.remove(index);
+            if task.complete_time.elapsed().unwrap() > Duration::from_secs(5) || task.order.order_type != elev_controller::ElevatorActions::Cabcall {
+                let index = self.task_list.iter().position(|x| *x == task).unwrap();
+                self.task_list.remove(index);
+            }  
         }
     }
 
@@ -186,10 +194,10 @@ impl TaskManager {
 
         // Number of floors, Distance between elevator and call, Direction of elevator
 
-        //println!("Current Task: {:?}\n task_queue: {:?}\n elev_queue {:?}", task_order, task_queue, elev_queue);
+        ////println!("Current Task: {:?}\n task_queue: {:?}\n elev_queue {:?}", task_order, task_queue, elev_queue);
         let mut rng = thread_rng();
-        let mut score = 0; // Higher is better
-        println!("[COST_DEBUG]: {:?}", task_order);
+        let mut score = 1; // Higher is better, must be > 0
+        //println!("[COST_DEBUG]: {:?}", task_order);
         let mut number_of_others_tasks = 0;
         let mut number_of_elevator_orders = 0;
         for task in task_queue {
@@ -204,9 +212,11 @@ impl TaskManager {
             Some(elev_current_doing) => {
                 //There are other orders in the elevator
                 let direction = TaskManager::direction_of_call(current_floor, last_floor);
+                let mut cabcall_override=1;
                 match elev_current_doing.order_type {
                     elev_controller::ElevatorActions::Cabcall => {
-                        score = 100;
+                        score = 100; //
+                        cabcall_override =0; //overrides delay calculations to give higher priority
                     }
                     elev_controller::ElevatorActions::LobbyDowncall => {
                         if direction == Direction::Down && last_floor > task_order.order.floor as isize {
@@ -233,26 +243,42 @@ impl TaskManager {
                         }
                     }
                 }
-                score = score - 20 * number_of_elevator_orders;
-                if score < 1 {
-                    score = 1;
-                }
+                let ip_score=elev_id;
+                let delay =2000+(5000/score+2500 * number_of_elevator_orders+150*ip_score as isize)*cabcall_override;
+
                 println!("[COST_DEBUG]: score_some_queue {:?} other_tasks {:?} elev_orders {:?}", score, number_of_others_tasks, number_of_elevator_orders);
-                let delay = Duration::from_millis(5000/(score as u64));
                 println!("[COST_DEBUG]: delay {:?}", delay);
-                delay
+
+                Duration::from_millis(delay as u64)
             }
             None => {
-                //There is no other orders in the elevator
-                let mut delay = 2000;
-                let random_number = rand::thread_rng().gen::<u8>();
-                delay += (random_number as u64) * 5;
-                if task_order.origin_id == elev_id {
-                    delay = 1
-                }
-                delay += number_of_others_tasks*500;
-                println!("[COST_DEBUG]: no_queue {:?}", delay);
-                Duration::from_millis(delay)
+
+                   //There is no other orders in the elevator
+                    let mut delay =1000;
+                    let ip_score= elev_id;
+                    let mut distance_score=0;
+                
+                
+                    //let random_number :u8 = rand::thread_rng().gen_range(1,10);
+                    //delay += (random_number as u64) * 10;
+                
+                    let current_order =&task_order.order;
+    
+                    if current_order.order_type==elev_controller::ElevatorActions::Cabcall{
+                        delay=20;
+                    }
+    
+                    else{
+                        distance_score =(current_floor-current_order.floor as isize).abs();
+                        delay=delay+500*distance_score as u64 +150*ip_score as u64;
+    
+                    }
+                    println!("DELAY :   {:?}",delay);
+                    println!("TASK Q: {:?}",task_queue[0].order.order_type);
+                    println!("Elev Q: {:?}",elev_queue.front());
+                    //delay += number_of_others_tasks*500;
+                    //println!("[COST_DEBUG]: no_queue {:?}", delay);
+                    Duration::from_millis(delay)
             }
         }
     }

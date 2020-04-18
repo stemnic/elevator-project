@@ -18,7 +18,7 @@ display_result() {
 while true; do
   exec 3>&1
   selection=$(dialog \
-    --backtitle "System Information" \
+    --backtitle "Elevator Debug Tests" \
     --title "Menu" \
     --clear \
     --nocancel \
@@ -26,6 +26,7 @@ while true; do
     "1" "Start blocking UDP traffic between elevators" \
     "2" "Start intermittent 20% packetloss" \
     "3" "Stop all tests" \
+    "4" "Kill/Terminate Elevator Server" \
     2>&1 1>&3)
   exit_status=$?
   exec 3>&-
@@ -62,6 +63,10 @@ while true; do
     3 )
       result=$(sudo iptables -F)
       display_result "Stop all testing"
+      ;;
+    4 )
+      result=$(pkill elevator-projec)
+      display_result "Killing elevator server"
       ;;
   esac
 done
