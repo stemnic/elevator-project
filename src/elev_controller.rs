@@ -126,12 +126,22 @@ impl ElevController {
                                 self.complete_order_signal(order);
                                 self.open_door();
                             } else {
-                                for task in queue_clone1{
+                                for task in queue_clone1.clone(){
                                     match task.order_type{
                                         ElevatorActions::Cabcall => {
                                             if task.floor == c_floor{
                                                 self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
                                                 let index = self.queue.iter().position(|x| *x == task).unwrap();
+                                                for task in queue_clone1.clone(){
+                                                    match task.order_type{
+                                                        ElevatorActions::Cabcall =>{}
+                                                        _ => {
+                                                            if task.floor == c_floor{
+                                                                clear_orders_at_floor.push(task.clone());
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                                 self.queue.remove(index);
                                                 self.complete_order_signal(&task);
                                                 self.open_door();
