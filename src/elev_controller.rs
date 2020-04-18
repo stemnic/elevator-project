@@ -84,6 +84,7 @@ impl ElevController {
     }
     
     pub fn handle_order(&mut self) {
+        //println!("{:?}", self.queue);
         match self.driver.get_floor_signal()
                     .expect("Get FloorSignal failed") {
             Floor::At(c_floor) => {
@@ -107,7 +108,7 @@ impl ElevController {
                     let queue_clone1=self.queue.clone();
                     match self.queue.front() {
                         Some(order) => {
-                            ////println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
+                            //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
                             if c_floor > order.floor{
                                 self.driver.set_motor_dir(MotorDir::Down).expect("Set MotorDir failed");
                             }
@@ -278,7 +279,7 @@ impl ElevController {
     pub fn broadcast_order(&self, order: Order, request: RequestType, origin: u32) {
         let broadcast = BcastTransmitter::new(self.udp_broadcast_port).unwrap();
         let data_block_internal = ElevatorButtonEvent{request: request, order: order, origin:origin };
-        println!("{:?}: Broadcasting {:?}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap() , data_block_internal);
+        //println!("{:?}: Broadcasting {:?}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap() , data_block_internal);
         let data_block_network = data_block_internal.clone();
         self.internal_msg_sender.send(data_block_internal).unwrap();
         thread::spawn(move || {

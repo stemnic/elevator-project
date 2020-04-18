@@ -165,7 +165,9 @@ impl TaskManager {
                 TaskStatemachineStates::CheckComplete => {
                     if task.complete {
                         task.state = TaskStatemachineStates::Complete;
-                        self.elevator.delete_order(&task.order);
+                        if task.order.order_type != elev_controller::ElevatorActions::Cabcall {
+                            self.elevator.delete_order(&task.order);
+                        } 
                     }
     
                 }
