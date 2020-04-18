@@ -66,7 +66,7 @@ fn main() {
     loop {
         match network_reciver.try_recv() {
             Ok(data) => {
-                println!("{:#?}: Reciving {:?}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(), data);
+                //println!("{:#?}: Reciving {:?}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(), data);
                 handle_network_message(&mut taskmanager, data);
             }
             Err(_) => {}
