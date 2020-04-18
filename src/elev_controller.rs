@@ -93,7 +93,7 @@ impl ElevController {
                             if time > Duration::from_secs(3) {                            
                                 self.driver.set_door_light(Light::Off).unwrap();
                                 self.door_state.complete = true;
-                                println!("[elev_controller] Door closed");
+                                //println!("[elev_controller] Door closed");
                             }
                         }
                         Err(e) => {
@@ -107,7 +107,7 @@ impl ElevController {
                     let queue_clone1=self.queue.clone();
                     match self.queue.front() {
                         Some(order) => {
-                            //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
+                            ////println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
                             if c_floor > order.floor{
                                 self.driver.set_motor_dir(MotorDir::Down).expect("Set MotorDir failed");
                             }
@@ -134,7 +134,7 @@ impl ElevController {
                                                 self.queue.remove(index);
                                                 self.complete_order_signal(&task);
                                                 self.open_door();
-                                                //println!("[Elev_controller]: Stopped here!")
+                                                ////println!("[Elev_controller]: Stopped here!")
                                             }
                                         }
                                         _ => {}
@@ -143,7 +143,7 @@ impl ElevController {
                             }
                             match self.last_floor {
                                 Floor::At(p_floor) => {
-                                    //println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
+                                    ////println!("[elev_controller] C: {:?} P: {:?}", c_floor, p_floor);
                                     if p_floor != c_floor {
                                         self.last_floor = self.driver.get_floor_signal().unwrap();
                                     }
@@ -163,7 +163,7 @@ impl ElevController {
                         self.complete_order_signal(&task);
                     }
                 }
-                //println!("[elev_controller] C: {:?}", c_floor);   
+                ////println!("[elev_controller] C: {:?}", c_floor);   
             }
             // TODO: Make elevator handle floor logic if it starts in between state
             Floor::Between => {
@@ -247,7 +247,7 @@ impl ElevController {
 
     fn open_door(&mut self) {
         self.driver.set_door_light(Light::On).unwrap();
-        println!("[elev_controller]: Door open");
+        //println!("[elev_controller]: Door open");
         self.door_state.complete = false;
         self.door_state.timestamp_open = SystemTime::now();
 
@@ -264,16 +264,27 @@ impl ElevController {
         self.broadcast_order(order_copy, RequestType::Taken, self.elevator_id);
     }
 
+    pub fn delete_order(&mut self, order: &Order) {
+        match self.queue.iter().position(|x| *x == *order){
+            Some(index) => {
+                self.queue.remove(index);
+            },
+            None => {
+                println!("[elev_controller] Nothing to delete")
+            }
+        }
+    }
+
     pub fn broadcast_order(&self, order: Order, request: RequestType, origin: u32) {
         let broadcast = BcastTransmitter::new(self.udp_broadcast_port).unwrap();
         let data_block_internal = ElevatorButtonEvent{request: request, order: order, origin:origin };
-        println!("[elev_controller] Broadcasting {:?}", data_block_internal);
+        println!("{:?}: Broadcasting {:?}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap() , data_block_internal);
         let data_block_network = data_block_internal.clone();
         self.internal_msg_sender.send(data_block_internal).unwrap();
         thread::spawn(move || {
-            for _ in 0..10 {
+            for _ in 0..3 {
                 broadcast.transmit(&data_block_network).unwrap();
-                sleep(Duration::from_millis(1));
+                sleep(Duration::from_millis(50));
             }
         });
         
