@@ -213,8 +213,19 @@ impl TaskManager {
                 //There are other orders in the elevator
                 let direction = TaskManager::direction_of_call(current_floor, last_floor);
                 let mut cabcall_override=1;
+                let mut cabcall_score=1;
+                let mut cabcall_score_enable=0;
                 match elev_current_doing.order_type {
                     elev_controller::ElevatorActions::Cabcall => {
+                        cabcall_score_enable=1;
+                        if direction == Direction::Down && last_floor > task_order.order.floor as isize ||
+                        direction == Direction::Up && last_floor < task_order.order.floor as isize{
+                            //Elevator moving towards order
+                            cabcall_score=(elev_driver::N_FLOORS as isize + 2) - (task_order.order.floor as isize - last_floor).abs();
+                        }
+                        else{
+                            cabcall_score=1;
+                        }
                         score = 100; //
                         cabcall_override =0; //overrides delay calculations to give higher priority
                     }
@@ -244,7 +255,7 @@ impl TaskManager {
                     }
                 }
                 let ip_score=elev_id;
-                let delay =2000+(5000/score+2500 * number_of_elevator_orders+150*ip_score as isize)*cabcall_override;
+                let delay =2000+(5000/score+2500 * number_of_elevator_orders+150*ip_score as isize)*cabcall_override+(5000/cabcall_score)*cabcall_score_enable;
 
                 println!("[COST_DEBUG]: score_some_queue {:?} other_tasks {:?} elev_orders {:?}", score, number_of_others_tasks, number_of_elevator_orders);
                 println!("[COST_DEBUG]: delay {:?}", delay);
