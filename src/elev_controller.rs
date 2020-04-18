@@ -84,6 +84,7 @@ impl ElevController {
     }
     
     pub fn handle_order(&mut self) {
+        //println!("{:?}", self.queue);
         match self.driver.get_floor_signal()
                     .expect("Get FloorSignal failed") {
             Floor::At(c_floor) => {
@@ -107,7 +108,7 @@ impl ElevController {
                     let queue_clone1=self.queue.clone();
                     match self.queue.front() {
                         Some(order) => {
-                            ////println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
+                            //println!("[elev_controller] C: {:?} O: {:?}", c_floor, order.floor);   
                             if c_floor > order.floor{
                                 self.driver.set_motor_dir(MotorDir::Down).expect("Set MotorDir failed");
                             }
@@ -117,6 +118,7 @@ impl ElevController {
                             if c_floor == order.floor{
                                 self.driver.set_motor_dir(MotorDir::Stop).expect("Set MotorDir failed");
                                 for task in queue_clone{
+
                                     if task.floor == c_floor{
                                         clear_orders_at_floor.push(task.clone());
                                     }
@@ -141,16 +143,6 @@ impl ElevController {
                                                     }
                                                 }
                                                 self.queue.remove(index);
-                                                for task in queue_clone1.clone(){
-                                                    match task.order_type{
-                                                        ElevatorActions::Cabcall =>{}
-                                                        _ => {
-                                                            if task.floor == c_floor{
-                                                                clear_orders_at_floor.push(task.clone());
-                                                            }
-                                                        }
-                                                    }
-                                                }
                                                 self.complete_order_signal(&task);
                                                 self.open_door();
                                                 ////println!("[Elev_controller]: Stopped here!")
@@ -283,10 +275,21 @@ impl ElevController {
         self.broadcast_order(order_copy, RequestType::Taken, self.elevator_id);
     }
 
+    pub fn delete_order(&mut self, order: &Order) {
+        match self.queue.iter().position(|x| *x == *order){
+            Some(index) => {
+                self.queue.remove(index);
+            },
+            None => {
+                println!("[elev_controller] Nothing to delete")
+            }
+        }
+    }
+
     pub fn broadcast_order(&self, order: Order, request: RequestType, origin: u32) {
         let broadcast = BcastTransmitter::new(self.udp_broadcast_port).unwrap();
         let data_block_internal = ElevatorButtonEvent{request: request, order: order, origin:origin };
-        println!("{:?}: Broadcasting {:?}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap() , data_block_internal);
+        //println!("{:?}: Broadcasting {:?}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap() , data_block_internal);
         let data_block_network = data_block_internal.clone();
         self.internal_msg_sender.send(data_block_internal).unwrap();
         thread::spawn(move || {
