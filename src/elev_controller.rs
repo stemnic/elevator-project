@@ -264,6 +264,17 @@ impl ElevController {
         self.broadcast_order(order_copy, RequestType::Taken, self.elevator_id);
     }
 
+    pub fn delete_order(&mut self, order: &Order) {
+        match self.queue.iter().position(|x| *x == *order){
+            Some(index) => {
+                self.queue.remove(index);
+            },
+            None => {
+                println!("[elev_controller] Nothing to delete")
+            }
+        }
+    }
+
     pub fn broadcast_order(&self, order: Order, request: RequestType, origin: u32) {
         let broadcast = BcastTransmitter::new(self.udp_broadcast_port).unwrap();
         let data_block_internal = ElevatorButtonEvent{request: request, order: order, origin:origin };
