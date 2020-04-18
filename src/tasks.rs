@@ -212,22 +212,24 @@ impl TaskManager {
             Some(elev_current_doing) => {
                 //There are other orders in the elevator
                 let direction = TaskManager::direction_of_call(current_floor, last_floor);
-                let mut cabcall_override=1;
-                let mut cabcall_score=1;
-                let mut cabcall_score_enable=0;
+                //override variables used to manipulate cost function delay
+                let mut score_override=1;
+                let mut ip_score_override=1;
+                let mut long_queue_delay_override=1;
+                let incoming_order = &task_order;
                 match elev_current_doing.order_type {
                     elev_controller::ElevatorActions::Cabcall => {
-                        cabcall_score_enable=1;
                         if direction == Direction::Down && last_floor > task_order.order.floor as isize ||
                         direction == Direction::Up && last_floor < task_order.order.floor as isize{
                             //Elevator moving towards order
-                            cabcall_score=(elev_driver::N_FLOORS as isize + 2) - (task_order.order.floor as isize - last_floor).abs();
+                            score=(elev_driver::N_FLOORS as isize + 2) - (task_order.order.floor as isize - last_floor).abs();
                         }
                         else{
-                            cabcall_score=1;
+                            //Elevator moving away from order
+                            score=1;
                         }
-                        score = 100; //
-                        cabcall_override =0; //overrides delay calculations to give higher priority
+                        ip_score_override=0; 
+                        long_queue_delay_override=0;
                     }
                     elev_controller::ElevatorActions::LobbyDowncall => {
                         if direction == Direction::Down && last_floor > task_order.order.floor as isize {
@@ -254,9 +256,20 @@ impl TaskManager {
                         }
                     }
                 }
+                if incoming_order.order.order_type==elev_controller::ElevatorActions::Cabcall{
+                    ip_score_override=0;
+                    long_queue_delay_override=0;
+                    score_override=0;
+                } 
+                if incoming_order.order.floor==elev_current_doing.floor{
+                    ip_score_override=0;
+                    long_queue_delay_override=0;
+                    score_override=0;
+                }
+                
                 let ip_score=elev_id;
-                let delay =2000+(5000/score+2500 * number_of_elevator_orders+150*ip_score as isize)*cabcall_override+(5000/cabcall_score)*cabcall_score_enable;
-
+                let delay =2000+(5000/score)*score_override+2500 * number_of_elevator_orders*long_queue_delay_override+150*ip_score as isize*ip_score_override;
+                // basis_delay+score_delay    +        amount_of_order_delay      +                         unique_ip_delay
                 println!("[COST_DEBUG]: score_some_queue {:?} other_tasks {:?} elev_orders {:?}", score, number_of_others_tasks, number_of_elevator_orders);
                 println!("[COST_DEBUG]: delay {:?}", delay);
 
