@@ -177,7 +177,14 @@ impl ElevController {
             // TODO: Make elevator handle floor logic if it starts in between state
             Floor::Between => {
                 match self.queue.front() {
-                    Some(_) => {}
+                    Some(order) => {
+                        if self.get_last_floor() > order.floor as isize{
+                            self.driver.set_motor_dir(MotorDir::Down).expect("Set MotorDir failed");
+                        }
+                        if self.get_last_floor() < order.floor as isize{
+                            self.driver.set_motor_dir(MotorDir::Up).expect("Set MotorDir failed");
+                        }
+                    }
                     None => {
                         self.driver.set_motor_dir(MotorDir::Down).unwrap();
                     }
