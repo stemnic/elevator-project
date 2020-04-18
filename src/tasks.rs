@@ -214,7 +214,7 @@ impl TaskManager {
                 let direction = TaskManager::direction_of_call(current_floor, last_floor);
                 match elev_current_doing.order_type {
                     elev_controller::ElevatorActions::Cabcall => {
-                        score = 100;
+                        score = 10;
                     }
                     elev_controller::ElevatorActions::LobbyDowncall => {
                         if direction == Direction::Down && last_floor > task_order.order.floor as isize {
