@@ -9,12 +9,13 @@ use std::time::Duration;
 use std::time::SystemTime;
 use std::collections::VecDeque;
 
-pub struct ElevController {
+pub struct ElevController<'a> {
     queue: VecDeque<Order>,
     driver: ElevIo,
     stopped: bool,
     door_state: DoorFloorState,
     last_floor: Floor,
+    signal_keeper: &'a SignalStorage,
     internal_msg_sender: Sender<ElevatorButtonEvent>,
     elevator_id: u32,
     udp_broadcast_port: u16,
@@ -30,6 +31,18 @@ pub struct ElevatorButtonEvent {
 struct DoorFloorState {
     timestamp_open: SystemTime,
     complete: bool
+}
+
+struct SignalStorage {
+    floor_singal: Floor,
+    stop_signal: Signal,
+    button_singals: std::vec::Vec<ButtonSignals>
+}
+
+struct ButtonSignals {
+    Internal: Signal,
+    CallUp: Signal,
+    CallDown: Signal
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
@@ -69,8 +82,24 @@ fn init_elevator(elev_io: &ElevIo) {
     }
 }
 
+impl SignalStorage {
+    fn new() -> SignalStorage {
+        let mut signal_vector: std::vec::Vec<ButtonSignals> = vec![];
+        for _ in 0..N_FLOORS {
+            signal_vector.push(ButtonSignals::new());
+        }
+        SignalStorage{floor_singal: Floor::At(0), stop_signal: Signal::Low, button_singals: signal_vector}
+    }
+}
 
-impl ElevController {
+impl ButtonSignals {
+    fn new() -> ButtonSignals {
+        ButtonSignals{Internal: Signal::Low, CallUp: Signal::Low, CallDown: Signal::Low}
+    }
+}
+
+
+impl<'a> ElevController<'a> {
     pub fn new(internal_message_sender: Sender<ElevatorButtonEvent>, elevator_id: u32, udp_broadcast_port: u16 , elevator_ip: &str, elevator_port: u16) -> io::Result<Self> {
         let que_obj: VecDeque<Order> = VecDeque::new();
         let elev_driver = ElevIo::new(elevator_ip, elevator_port).expect("Connecting to elevator failed");
@@ -79,7 +108,14 @@ impl ElevController {
         let sys_time = SystemTime::now();
         let init_door_state = DoorFloorState{timestamp_open: sys_time, complete: true} ;
         let current_floor = elev_driver.get_floor_signal().unwrap();
-        let controller = ElevController{queue: que_obj, driver:elev_driver, stopped: false, door_state:  init_door_state, last_floor: current_floor, internal_msg_sender: internal_message_sender, elevator_id: elevator_id, udp_broadcast_port: udp_broadcast_port};
+        let mut signal_keeper: &'a SignalStorage = &SignalStorage::new();
+        let controller = ElevController{queue: que_obj, driver:elev_driver, stopped: false, door_state:  init_door_state, last_floor: current_floor, signal_keeper: &signal_keeper, internal_msg_sender: internal_message_sender, elevator_id: elevator_id, udp_broadcast_port: udp_broadcast_port};
+        thread::spawn(move || {
+            loop {
+                signal_keeper.stop_signal = Signal::High;
+            }
+        });
+        
         Ok(controller)
     }
     

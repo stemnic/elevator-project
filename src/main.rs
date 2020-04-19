@@ -20,13 +20,11 @@ fn main() {
     let mut elevator_ip = elev_driver::DEFAULT_IP_ADDRESS;
     let mut elevator_port = elev_driver::DEFAULT_PORT;
     match args.len() {
-        1 => {
-
-        }
+        1 => {}
         2 => {
             let cmd = &args[1];
             if cmd.contains("--help") {
-                //println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
+                println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
                 std::process::exit(0);
             }
             id = cmd.parse::<u32>().unwrap();
@@ -57,11 +55,11 @@ fn main() {
     let (internal_sender, internal_reciver) = channel::<elev_controller::ElevatorButtonEvent>();
     thread::spawn(move || {
         let socket = network_rust::bcast::BcastReceiver::new(udp_broadcast_port).unwrap();
-        
         thread::spawn(move || {
             socket.run(network_sender);
         });
     });
+    
     let mut taskmanager = tasks::TaskManager::new(internal_sender, id, udp_broadcast_port, elevator_ip, elevator_port).unwrap();
     
     loop {

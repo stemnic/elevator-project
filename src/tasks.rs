@@ -44,8 +44,8 @@ enum Direction {
     Down
 }
 
-pub struct TaskManager {
-    elevator: elev_controller::ElevController,
+pub struct TaskManager<'a> {
+    elevator: elev_controller::ElevController<'a>,
     task_list: Vec<Task>,
     elevator_id: u32
 }
@@ -58,7 +58,7 @@ impl Task {
     }
 }
 
-impl TaskManager {
+impl<'a> TaskManager<'a> {
     pub fn new(internal_sender: Sender<elev_controller::ElevatorButtonEvent>, elevator_id: u32, udp_broadcast_port: u16, elevator_ip: &str, elevator_port: u16) -> io::Result<Self> {
         let elev_controller = elev_controller::ElevController::new(internal_sender, elevator_id, udp_broadcast_port, elevator_ip, elevator_port).unwrap();
         let task_vec = Vec::new();
