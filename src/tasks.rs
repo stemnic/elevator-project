@@ -194,29 +194,23 @@ impl TaskManager {
 
         // Number of floors, Distance between elevator and call, Direction of elevator
 
-        ////println!("Current Task: {:?}\n task_queue: {:?}\n elev_queue {:?}", task_order, task_queue, elev_queue);
-        let mut rng = thread_rng();
         let mut score = 1; // Higher is better, must be > 0
-        //println!("[COST_DEBUG]: {:?}", task_order);
-        let mut number_of_others_tasks = 0;
+        let ip_score=elev_id;
+        let direction = TaskManager::direction_of_call(current_floor, last_floor);
+        let incoming_order = &task_order;
+
         let mut number_of_elevator_orders = 0;
-        for task in task_queue {
-            if task.state == TaskStatemachineStates::CostTake || task.state == TaskStatemachineStates::New {
-                number_of_others_tasks += 1;
-            }
-        }
-        for elev_orders in elev_queue {
+        for _elev_orders in elev_queue {
             number_of_elevator_orders += 1;
         }
+        //override variables used to manipulate cost function delay
+        let mut score_override=1;
+        let mut ip_score_override=1;
+        let mut long_queue_delay_override=1;
+
         match elev_queue.front() {
             Some(elev_current_doing) => {
                 //There are other orders in the elevator
-                let direction = TaskManager::direction_of_call(current_floor, last_floor);
-                //override variables used to manipulate cost function delay
-                let mut score_override=1;
-                let mut ip_score_override=1;
-                let mut long_queue_delay_override=1;
-                let incoming_order = &task_order;
                 match elev_current_doing.order_type {
                     elev_controller::ElevatorActions::Cabcall => {
                         if direction == Direction::Down && last_floor > task_order.order.floor as isize ||
@@ -228,8 +222,7 @@ impl TaskManager {
                             //Elevator moving away from order
                             score=1;
                         }
-                        ip_score_override=0; 
-                        long_queue_delay_override=0;
+
                     }
                     elev_controller::ElevatorActions::LobbyDowncall => {
                         if direction == Direction::Down && last_floor > task_order.order.floor as isize {
@@ -256,21 +249,14 @@ impl TaskManager {
                         }
                     }
                 }
-                if incoming_order.order.order_type==elev_controller::ElevatorActions::Cabcall{
+                if incoming_order.order.order_type==elev_controller::ElevatorActions::Cabcall || incoming_order.order.floor==elev_current_doing.floor{
                     ip_score_override=0;
                     long_queue_delay_override=0;
                     score_override=0;
                 } 
-                if incoming_order.order.floor==elev_current_doing.floor{
-                    ip_score_override=0;
-                    long_queue_delay_override=0;
-                    score_override=0;
-                }
-                
-                let ip_score=elev_id;
                 let delay =2000+(5000/score)*score_override+2500 * number_of_elevator_orders*long_queue_delay_override+150*ip_score as isize*ip_score_override;
                 // basis_delay+score_delay    +        amount_of_order_delay      +                         unique_ip_delay
-                println!("[COST_DEBUG]: score_some_queue {:?} other_tasks {:?} elev_orders {:?}", score, number_of_others_tasks, number_of_elevator_orders);
+                println!("[COST_DEBUG]: score_some_queue {:?} elev_orders {:?}", score, number_of_elevator_orders);
                 println!("[COST_DEBUG]: delay {:?}", delay);
 
                 Duration::from_millis(delay as u64)
@@ -279,29 +265,20 @@ impl TaskManager {
 
                    //There is no other orders in the elevator
                     let mut delay =1000;
-                    let ip_score= elev_id;
                     let mut distance_score=0;
-                
-                
-                    //let random_number :u8 = rand::thread_rng().gen_range(1,10);
-                    //delay += (random_number as u64) * 10;
-                
+
                     let current_order =&task_order.order;
-    
                     if current_order.order_type==elev_controller::ElevatorActions::Cabcall{
                         delay=20;
                     }
-    
                     else{
                         distance_score =(current_floor-current_order.floor as isize).abs();
                         delay=delay+500*distance_score as u64 +150*ip_score as u64;
     
                     }
-                    println!("DELAY :   {:?}",delay);
+                    println!("DELAY : {:?}",delay);
                     println!("TASK Q: {:?}",task_queue[0].order.order_type);
                     println!("Elev Q: {:?}",elev_queue.front());
-                    //delay += number_of_others_tasks*500;
-                    //println!("[COST_DEBUG]: no_queue {:?}", delay);
                     Duration::from_millis(delay)
             }
         }
@@ -322,4 +299,3 @@ impl TaskManager {
         Duration::from_secs(elev_driver::N_FLOORS as u64 * 3) + TaskManager::cost_function_delay_take(task_order, task_queue, elev_queue, current_floor, last_floor, elev_id)
     }
 }
-
