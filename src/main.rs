@@ -3,13 +3,12 @@ use std::thread;
 use std::sync::mpsc::*;
 use std::env;
 use regex::Regex;
-use std::time::SystemTime;
 
-mod tasks;
+mod task_manager;
 mod elev_controller;
 
 fn main() {
-    println!("Starting Elevator server");
+    println!("Starting Elevator server for {} floors", elev_driver::N_FLOORS);
     let args: Vec<String> = env::args().collect();
     let re = Regex::new(r"((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)))+$").unwrap();
     let ip_addr = network_rust::localip::get_localip().unwrap().to_string();
@@ -20,13 +19,11 @@ fn main() {
     let mut elevator_ip = elev_driver::DEFAULT_IP_ADDRESS;
     let mut elevator_port = elev_driver::DEFAULT_PORT;
     match args.len() {
-        1 => {
-
-        }
+        1 => {}
         2 => {
             let cmd = &args[1];
             if cmd.contains("--help") {
-                //println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
+                println!("elevator-project (elevator id) (udp_broadcast_port) (elevator hardware ip) (elevator hardware port)");
                 std::process::exit(0);
             }
             id = cmd.parse::<u32>().unwrap();
@@ -53,21 +50,17 @@ fn main() {
         }
     }
   
-    let (network_sender, network_reciver) = channel::<elev_controller::ElevatorButtonEvent>();
-    let (internal_sender, internal_reciver) = channel::<elev_controller::ElevatorButtonEvent>();
+    let (network_sender, network_reciver) = channel::<elev_controller::ButtonEvent>();
+    let (internal_sender, internal_reciver) = channel::<elev_controller::ButtonEvent>();
     thread::spawn(move || {
         let socket = network_rust::bcast::BcastReceiver::new(udp_broadcast_port).unwrap();
-        
-        thread::spawn(move || {
-            socket.run(network_sender);
-        });
+        socket.run(network_sender);
     });
-    let mut taskmanager = tasks::TaskManager::new(internal_sender, id, udp_broadcast_port, elevator_ip, elevator_port).unwrap();
+    let mut taskmanager = task_manager::TaskManager::new(internal_sender, id, udp_broadcast_port, elevator_ip, elevator_port).unwrap();
     
     loop {
         match network_reciver.try_recv() {
             Ok(data) => {
-                //println!("{:#?}: Reciving {:?}", SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap(), data);
                 handle_network_message(&mut taskmanager, data);
             }
             Err(_) => {}
@@ -78,11 +71,11 @@ fn main() {
             }
             Err(_) => {}
         }
-        taskmanager.run_task_state_machine();
+        taskmanager.run_state_machine();
     }
 }
 
-fn handle_network_message(task_mgr: &mut tasks::TaskManager, msg: elev_controller::ElevatorButtonEvent) {
+fn handle_network_message(task_mgr: &mut task_manager::TaskManager, msg: elev_controller::ButtonEvent) {
     match msg.request {
         elev_controller::RequestType::Request => {
             task_mgr.add_new_task(msg.order, msg.origin);
