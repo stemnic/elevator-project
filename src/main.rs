@@ -59,17 +59,25 @@ fn main() {
     let mut taskmanager = task_manager::TaskManager::new(internal_sender, id, udp_broadcast_port, elevator_ip, elevator_port).unwrap();
     
     loop {
-        match network_reciver.try_recv() {
-            Ok(data) => {
-                handle_network_message(&mut taskmanager, data);
+        loop {
+            match network_reciver.try_recv() {
+                Ok(data) => {
+                    handle_network_message(&mut taskmanager, data);
+                }
+                Err(_) => {
+                    break
+                }
             }
-            Err(_) => {}
         }
-        match internal_reciver.try_recv() {
-            Ok(data) => {
-                handle_network_message(&mut taskmanager, data);
+        loop {
+            match internal_reciver.try_recv() {
+                Ok(data) => {
+                    handle_network_message(&mut taskmanager, data);
+                }
+                Err(_) => {
+                    break
+                }
             }
-            Err(_) => {}
         }
         taskmanager.run_state_machine();
     }
