@@ -18,7 +18,7 @@ All elevators on the network should have different id's
 ## Docker Setup
 To make it easier to test with multiple elevators on the same machine a Docker setup has been made where the number of elevators can be dynamically set.
 
-Each elevator (server and simulator) lives in it's owm container and are connected to a display container over ssh.
+Each elevator (server and simulator) lives in it's own container and are connected to a display container over ssh.
 ### Prerequisite
 - [Docker](https://docs.docker.com/install/)
 - [Docker-compose](https://docs.docker.com/compose/install/)
