@@ -204,6 +204,7 @@ impl TaskManager {
                 // There are other orders in the elevator
 
                 let score; // Higher is better, must be > 0
+                // Based upon Dong & Zafar's Elevator Scheduling (http://www.columbia.edu/~cs2035/courses/ieor4405.S13/p14.pdf)
                 match elev_current_doing.order_type {
                     elev_controller::ButtonType::CabCall => {
                         if direction == Direction::Down && last_floor > task_order.order.floor as isize ||
