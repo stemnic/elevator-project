@@ -1,6 +1,6 @@
 [package]
 name = "elevator-project"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Ole Sivert Aarhaug <ole.sivert@aarhaug.com>"]
 edition = "2018"
 
