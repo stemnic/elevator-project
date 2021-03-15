@@ -1,5 +1,5 @@
 FROM rust:latest
-RUN apt-get update && apt-get install -y tmux ssh wget sudo dialog iptables locales-all && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y tmux ssh wget sudo dialog iptables vim locales-all && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/elevator-project
 
@@ -17,6 +17,12 @@ RUN cargo install --path .
 
 COPY network_stress_test.sh .
 RUN chmod +x network_stress_test.sh
+
+COPY net_block.sh .
+RUN chmod +x net_block.sh
+
+COPY net_prob_drop.sh .
+RUN chmod +x net_prob_drop.sh
 
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
