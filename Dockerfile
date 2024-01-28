@@ -3,8 +3,8 @@ RUN apt-get update && apt-get install -y tmux ssh wget sudo dialog iptables vim 
 
 WORKDIR /usr/src/elevator-project
 
-RUN yes pass | adduser elev
-RUN adduser elev sudo
+RUN yes pass | adduser elev --gecos "First Last,RoomNumber,WorkPhone,HomePhone"
+RUN usermod -aG sudo elev
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 
 RUN wget https://github.com/TTK4145/Simulator-v2/releases/download/v1.5/SimElevatorServer && chmod +x SimElevatorServer
